@@ -148,11 +148,11 @@ export function isFork(fenBefore: string, san: string): boolean {
 
 const isMateFor = (e: Eval | undefined, sign: number) => e?.mate !== undefined && Math.sign(e.mate) === sign
 
-const insightCache = new WeakMap<GameAnalysis, MoveInsight[]>()
+const insightCache = new WeakMap<GameAnalysis, { color: GameRecord['color']; insights: MoveInsight[] }>()
 
 export function annotateGame(game: GameRecord, analysis: GameAnalysis): MoveInsight[] {
   const cached = insightCache.get(analysis)
-  if (cached) return cached
+  if (cached?.color === game.color) return cached.insights
   const me = game.color === 'white' ? 'w' : 'b'
   const sign = me === 'w' ? 1 : -1
   const pov = (e: Eval) => (me === 'w' ? winPercent(e) : 100 - winPercent(e))
@@ -217,7 +217,7 @@ export function annotateGame(game: GameRecord, analysis: GameAnalysis): MoveInsi
     })
     opponentLoss = 0
   })
-  insightCache.set(analysis, out)
+  insightCache.set(analysis, { color: game.color, insights: out })
   return out
 }
 
@@ -566,4 +566,64 @@ function planFor(w: Weakness): Plan {
         links: [training('middlegame', 'Lichess-Aufgaben: Mittelspiel')],
       }
   }
+}
+
+export type MomentKind = 'mistake' | 'punish' | 'openingGood' | 'openingBad' | 'end'
+
+export interface KeyMoment {
+  /** Position to show: before the move for move moments, the final position for the end. */
+  ply: number
+  kind: MomentKind
+  good?: boolean
+  insight?: MoveInsight
+  winFrom: number
+  winTo: number
+}
+
+export const MAX_MOMENTS = 6
+
+/** The biggest swings of a game, alternating between bad and good, plus the ending, in game order. */
+export function keyMoments(game: GameRecord, analysis: GameAnalysis): KeyMoment[] {
+  const insights = annotateGame(game, analysis)
+  const win = (ply: number) => {
+    const e = analysis.evals[ply]
+    if (!e) return 50
+    return game.color === 'white' ? winPercent(e) : 100 - winPercent(e)
+  }
+  type Scored = { moment: KeyMoment; score: number }
+  const bad: Scored[] = insights
+    .filter(m => m.loss >= 10)
+    .map(m => ({ moment: { ply: m.ply, kind: 'mistake', good: false, insight: m, winFrom: m.winBefore, winTo: m.winAfter }, score: m.loss }))
+  const good: Scored[] = insights
+    .filter(m => m.ply > 0 && m.loss < 5 && m.winBefore - win(m.ply - 1) >= 10)
+    .map(m => ({
+      moment: { ply: m.ply, kind: 'punish', good: true, insight: m, winFrom: win(m.ply - 1), winTo: m.winAfter },
+      score: m.winAfter - win(m.ply - 1),
+    }))
+
+  const openingEnd = game.division?.middle ?? 20
+  if (game.moves.length > openingEnd + 4) {
+    const w = win(openingEnd)
+    const moment = { ply: openingEnd, winFrom: win(0), winTo: w }
+    if (w >= 62) good.push({ moment: { ...moment, kind: 'openingGood', good: true }, score: w - 50 })
+    if (w <= 38) bad.push({ moment: { ...moment, kind: 'openingBad', good: false }, score: 50 - w })
+  }
+
+  bad.sort((a, b) => b.score - a.score)
+  good.sort((a, b) => b.score - a.score)
+  const picked: KeyMoment[] = []
+  while (picked.length < MAX_MOMENTS - 1 && (bad.length || good.length)) {
+    const goodCount = picked.filter(m => m.good).length
+    const takeBad = bad.length > 0 && (!good.length || goodCount >= picked.length - goodCount)
+    picked.push((takeBad ? bad : good).shift()!.moment)
+  }
+  const n = game.moves.length
+  picked.push({
+    ply: n,
+    kind: 'end',
+    good: game.result === 'win' ? true : game.result === 'loss' ? false : undefined,
+    winFrom: win(Math.max(0, n - 1)),
+    winTo: win(n),
+  })
+  return picked.sort((a, b) => a.ply - b.ply)
 }

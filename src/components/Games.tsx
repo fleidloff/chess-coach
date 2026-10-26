@@ -16,7 +16,7 @@ export function Games({ games, analyses, open, onOpen }: Props) {
   if (!games.length) return <p className="empty">Keine Partien passen zu diesem Filter.</p>
   return (
     <div className="stack">
-      {openGame && open && <GameViewer key={`${open.gameId}-${open.ply}`} game={openGame} analysis={analyses.get(openGame.id)} ply={open.ply} onClose={() => onOpen()} />}
+      {openGame && open && <GameViewer key={`${open.gameId}-${open.ply}`} game={openGame} analysis={analyses.get(openGame.id)} ply={open.ply} showMoments onClose={() => onOpen()} />}
       <div className="table-wrap">
         <table>
           <thead>

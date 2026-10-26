@@ -4,7 +4,7 @@ import { Chess } from 'chess.js'
 import type { GameRecord } from './lichess.ts'
 import { parseGame } from './lichess.ts'
 import type { GameAnalysis } from './analysis.ts'
-import { annotateGame, buildReport, hangingSquares, isFork, severityOf, winPercent } from './analysis.ts'
+import { annotateGame, buildReport, hangingSquares, isFork, keyMoments, severityOf, winPercent } from './analysis.ts'
 
 test('win chance follows the Lichess curve', () => {
   assert.equal(Math.round(winPercent({ cp: 0 })), 50)
@@ -73,4 +73,11 @@ test('reads a Lichess game from the user\'s side', () => {
   assert.equal(game.color, 'black')
   assert.equal(game.result, 'loss')
   assert.deepEqual(game.lichessEvals?.map(e => e.cp ?? e.mate), [30, -3])
+})
+
+test('key moments mix good and bad in game order', () => {
+  const asBlack = keyMoments(scholarsMate, analysis)
+  assert.deepEqual(asBlack.map(m => [m.kind, m.ply, m.good]), [['mistake', 5, false], ['end', 7, false]])
+  const asWhite = keyMoments({ ...scholarsMate, color: 'white', result: 'win' }, analysis)
+  assert.deepEqual(asWhite.map(m => [m.kind, m.ply, m.good]), [['punish', 6, true], ['end', 7, true]])
 })
