@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
-import { Chess } from 'chess.js'
+import { Chess, type Square } from 'chess.js'
 import type { GameRecord } from '../lib/lichess.ts'
 import type { PuzzleRecord, Tag } from '../lib/analysis.ts'
 import { TAG_LABEL } from '../lib/analysis.ts'
@@ -81,6 +81,7 @@ function Trainer({ puzzle, game, onUpdate, onNext, onOpenGame }: TrainerProps) {
   const [message, setMessage] = useState('')
   const [hint, setHint] = useState(false)
   const [input, setInput] = useState('')
+  const [selected, setSelected] = useState<string>()
   const solution = puzzle.solution!
   const side = puzzle.fen.split(' ')[1] === 'w' ? 'white' : 'black'
   const solutionSquares = squaresOf(puzzle.fen, solution[0])
@@ -114,10 +115,36 @@ function Trainer({ puzzle, game, onUpdate, onNext, onOpenGame }: TrainerProps) {
   }
 
   const onDrop = (from: string, to: string) => {
+    setSelected(undefined)
     const candidates = new Chess(puzzle.fen).moves({ verbose: true }).filter(m => m.from === from && m.to === to)
     if (!candidates.length) return false
     const promotion = candidates.length > 1 ? (candidates.find(m => m.san === solution[0])?.promotion ?? 'q') : undefined
     return tryMove({ from, to, promotion })
+  }
+
+  const targets = useMemo(
+    () => (selected ? new Chess(puzzle.fen).moves({ square: selected as Square, verbose: true }) : []),
+    [puzzle.fen, selected],
+  )
+
+  const onSquareClick = (square: string, pieceType?: string) => {
+    if (status !== 'solving') return
+    if (selected && targets.some(m => m.to === square)) {
+      onDrop(selected, square)
+      return
+    }
+    setSelected(pieceType?.[0] === side[0] && square !== selected ? square : undefined)
+  }
+
+  const squareStyles: Record<string, React.CSSProperties> = {}
+  if (hint && solutionSquares) squareStyles[solutionSquares.startSquare] = { boxShadow: 'inset 0 0 0 4px var(--accent)' }
+  if (selected) squareStyles[selected] = { ...squareStyles[selected], background: 'rgba(255, 210, 0, 0.5)' }
+  for (const m of targets) {
+    squareStyles[m.to] = {
+      background: m.captured
+        ? 'radial-gradient(circle closest-side, transparent 78%, rgba(0, 0, 0, 0.3) 80%)'
+        : 'radial-gradient(circle closest-side, rgba(0, 0, 0, 0.3) 32%, transparent 34%)',
+    }
   }
 
   return (
@@ -131,9 +158,11 @@ function Trainer({ puzzle, game, onUpdate, onNext, onOpenGame }: TrainerProps) {
             arrows: status === 'revealed' && solutionSquares ? [{ ...solutionSquares, color: ARROW_BEST }] : [],
             allowDrawingArrows: false,
             showAnimations: !reducedMotion(),
-            squareStyles: hint && solutionSquares ? { [solutionSquares.startSquare]: { boxShadow: 'inset 0 0 0 4px var(--accent)' } } : {},
+            squareStyles,
             canDragPiece: ({ piece }) => status === 'solving' && piece.pieceType[0] === side[0],
+            onPieceDrag: ({ square }) => setSelected(square ?? undefined),
             onPieceDrop: ({ sourceSquare, targetSquare }) => (targetSquare ? onDrop(sourceSquare, targetSquare) : false),
+            onSquareClick: ({ square, piece }) => onSquareClick(square, piece?.pieceType),
           }}
         />
       </div>
