@@ -1,0 +1,33 @@
+{
+  "name": "chess-coach",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "engine": "mkdir -p public/engine && cp node_modules/stockfish/bin/stockfish-19-lite-single.js node_modules/stockfish/bin/stockfish-19-lite-single.wasm public/engine/",
+    "predev": "npm run engine",
+    "dev": "vite",
+    "prebuild": "npm run engine",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "check": "npm run lint && npm run build && npm test",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "chess.js": "^1.4.0",
+    "react": "^19.3.1",
+    "react-chessboard": "^5.12.1",
+    "react-dom": "^19.3.1",
+    "stockfish": "^19.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.88.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4"
+  }
+}
