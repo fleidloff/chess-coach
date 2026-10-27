@@ -156,7 +156,12 @@ trainer for its own tag. `App` builds the position list for every tag that appea
 - `BoardState` lives in `App`: `{ ply, node?, branch? }`. A click on a feedback card sets `ply` to the move and shows
   the node's arrows (red: played, green: best) and highlight squares. A branch button plays an engine line from that
   position, one move per 900 ms; the step buttons then move inside the branch until "Back to game".
-- Below `md` the page scrolls as one column. From `md` on, the page is one screen high and each panel scrolls.
+- Below `md` the page scrolls as one column. The board, its caption, the step buttons and the line buttons stay pinned
+  at the top (`sticky`), so a tap on a card shows its position without scrolling up. To keep room for the cards, the
+  pinned board is at most 40 % of the screen height, the user's own player line and the arrow legend are hidden, and
+  the move list scrolls with the page. `max-md:contents` on `BoardView`'s section and on its wrapper in `App` makes the
+  pinned part a child of `main`, so it stays pinned over the whole card list.
+- From `md` on, the page is one screen high and each panel scrolls.
 
 ## Storage
 

@@ -92,6 +92,7 @@ export function BoardView({ game, report, state, onChange }: Props) {
   let fen: string
   let arrows: { startSquare: string; endSquare: string; color: string }[] = []
   const squareStyles: Record<string, React.CSSProperties> = {}
+  let legend = ''
   let caption: string
   if (branch && node) {
     fen = branchFens[branch.index]
@@ -105,7 +106,8 @@ export function BoardView({ game, report, state, onChange }: Props) {
     if (node && node.ply === ply) {
       arrows = node.arrows.map(a => ({ startSquare: a.from, endSquare: a.to, color: a.color }))
       node.highlightSquares.forEach(sq => (squareStyles[sq] = HIGHLIGHT))
-      caption = `Before ${node.moveNotation}. Red: your move. Green: best move.`
+      caption = `Before ${node.moveNotation}.`
+      legend = 'Red: your move. Green: best move.'
     } else if (ply > 0) {
       const last = playMove(fens[ply - 1], moves[ply - 1])
       if (last) squareStyles[last.move.from] = squareStyles[last.move.to] = LAST_MOVE
@@ -116,12 +118,12 @@ export function BoardView({ game, report, state, onChange }: Props) {
   }
 
   const orientation = game?.userColor ?? 'white'
-  const player = (color: 'white' | 'black') => {
+  const player = (color: 'white' | 'black', className = '') => {
     if (!game) return null
     const name = color === 'white' ? game.whitePlayer : game.blackPlayer
     const rating = color === 'white' ? game.whiteRating : game.blackRating
     return (
-      <div className="flex items-center justify-between gap-2 text-sm">
+      <div className={`flex items-center justify-between gap-2 text-sm ${className}`}>
         <span className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden
@@ -136,7 +138,10 @@ export function BoardView({ game, report, state, onChange }: Props) {
   }
 
   return (
-    <section aria-label="Board" className="mx-auto flex w-full max-w-[min(100%,calc(100dvh-15rem))] min-w-[260px] flex-col gap-2">
+    <section
+      aria-label="Board"
+      className="mx-auto flex w-full max-w-[min(100%,calc(100dvh-15rem))] min-w-[260px] flex-col gap-2 max-md:contents max-md:*:px-4"
+    >
       {game && (
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
           <span>
@@ -154,71 +159,77 @@ export function BoardView({ game, report, state, onChange }: Props) {
         </div>
       )}
       {player(orientation === 'white' ? 'black' : 'white')}
-      <Chessboard
-        options={{
-          id: 'coach-board',
-          position: fen,
-          boardOrientation: orientation,
-          arrows,
-          squareStyles,
-          allowDragging: false,
-          allowDrawingArrows: false,
-          showAnimations: !reducedMotion(),
-        }}
-      />
-      {player(orientation)}
+      {/* Sticky on phones. `max-md:contents` on this section and its wrapper in App lets it span the cards below. */}
+      <div className="flex flex-col gap-2 max-md:sticky max-md:top-0 max-md:z-10 max-md:border-b max-md:border-stone-200 max-md:bg-stone-50 max-md:py-2 max-md:shadow-sm dark:max-md:border-stone-800 dark:max-md:bg-stone-950">
+        <div className="mx-auto w-full max-md:max-w-[min(100%,40svh)]">
+          <Chessboard
+            options={{
+              id: 'coach-board',
+              position: fen,
+              boardOrientation: orientation,
+              arrows,
+              squareStyles,
+              allowDragging: false,
+              allowDrawingArrows: false,
+              showAnimations: !reducedMotion(),
+            }}
+          />
+        </div>
+        {player(orientation, 'max-md:hidden')}
 
-      <p className="min-h-5 text-center text-sm text-stone-600 dark:text-stone-400" aria-live="polite">
-        {caption}
-      </p>
+        <p className="min-h-5 text-center text-sm text-stone-600 max-md:text-xs dark:text-stone-400" aria-live="polite">
+          {caption}
+          {legend && <span className="max-md:hidden"> {legend}</span>}
+        </p>
 
-      <div className="flex items-center justify-center gap-1.5" role="group" aria-label={branch ? 'Step through the line' : 'Step through the game'}>
-        <button className={btn} onClick={() => go(0)} disabled={index === 0} aria-label="First position">
-          <ChevronsLeft className="size-4" aria-hidden />
-        </button>
-        <button className={btn} onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous move">
-          <ChevronLeft className="size-4" aria-hidden />
-        </button>
-        <button className={btn} onClick={() => go(index + 1)} disabled={index === end} aria-label="Next move">
-          <ChevronRight className="size-4" aria-hidden />
-        </button>
-        <button className={btn} onClick={() => go(end)} disabled={index === end} aria-label="Last position">
-          <ChevronsRight className="size-4" aria-hidden />
-        </button>
-        {branch && (
-          <>
-            <button
-              className={btn}
-              onClick={() =>
-                onChange({
-                  ...state,
-                  branch: { ...branch, index: branch.index >= branchEnd ? 0 : branch.index, playing: !branch.playing },
-                })
-              }
-              aria-label={branch.playing ? 'Pause' : 'Play the line'}
-            >
-              {branch.playing ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
-            </button>
-            <button className={`${btn} gap-1 text-sm`} onClick={() => onChange({ ply: node!.ply, node })}>
-              <Undo2 className="size-4" aria-hidden /> Back to game
-            </button>
-          </>
+        <div className="flex items-center justify-center gap-1.5" role="group" aria-label={branch ? 'Step through the line' : 'Step through the game'}>
+          <button className={btn} onClick={() => go(0)} disabled={index === 0} aria-label="First position">
+            <ChevronsLeft className="size-4" aria-hidden />
+          </button>
+          <button className={btn} onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous move">
+            <ChevronLeft className="size-4" aria-hidden />
+          </button>
+          <button className={btn} onClick={() => go(index + 1)} disabled={index === end} aria-label="Next move">
+            <ChevronRight className="size-4" aria-hidden />
+          </button>
+          <button className={btn} onClick={() => go(end)} disabled={index === end} aria-label="Last position">
+            <ChevronsRight className="size-4" aria-hidden />
+          </button>
+          {branch && (
+            <>
+              <button
+                className={btn}
+                onClick={() =>
+                  onChange({
+                    ...state,
+                    branch: { ...branch, index: branch.index >= branchEnd ? 0 : branch.index, playing: !branch.playing },
+                  })
+                }
+                aria-label={branch.playing ? 'Pause' : 'Play the line'}
+              >
+                {branch.playing ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
+              </button>
+              <button className={`${btn} gap-1 text-sm`} onClick={() => onChange({ ply: node!.ply, node })}>
+                <Undo2 className="size-4" aria-hidden /> Back to game
+              </button>
+            </>
+          )}
+        </div>
+
+        {node && !branch && node.ply === ply && node.branches.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2">
+            {node.branches.map(b => (
+              <button
+                key={b.label}
+                className={`${btn} gap-1.5 px-3 text-sm`}
+                onClick={() => onChange({ ...state, branch: { branch: b, index: 0, playing: true } })}
+              >
+                <Play className="size-3.5" aria-hidden /> {b.label}
+              </button>
+            ))}
+          </div>
         )}
       </div>
-
-      {node && !branch && node.ply === ply && node.branches.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-2">
-          {node.branches.map(b => (
-            <button
-              key={b.label}
-              className={`${btn} gap-1.5 px-3 text-sm`}
-              onClick={() => onChange({ ...state, branch: { branch: b, index: 0, playing: true } })}
-            >
-              <Play className="size-3.5" aria-hidden /> {b.label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {moves.length > 0 && (
         <ol aria-label="Moves" className="flex max-h-40 flex-wrap gap-x-1 gap-y-0.5 overflow-y-auto text-sm md:max-h-none">

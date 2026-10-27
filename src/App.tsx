@@ -268,12 +268,12 @@ export default function App() {
         )}
       </header>
 
-      <main className="flex flex-1 flex-col md:grid md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
+      <main className="flex flex-1 flex-col gap-2 max-md:pt-3 md:grid md:gap-0 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
         {training ? (
           <Trainer tag={training.tag} positions={training.positions} onExit={() => setTraining(undefined)} />
         ) : (
           <>
-            <div className="p-4 md:overflow-y-auto">
+            <div className="max-md:contents md:overflow-y-auto md:p-4">
               <BoardView game={game} report={report} state={board} onChange={setBoard} />
             </div>
             <aside
