@@ -1,20 +1,34 @@
 # Chess Coach
 
-Analysiert deine Lichess-Partien komplett im Browser: häufigste Fehler, Stärken, Trainingsplan und Aufgaben aus deinen eigenen Fehlern. Kein Backend, kein Konto.
+Finds the mistakes you repeat. Chess Coach loads your last 10 games from Lichess or Chess.com and runs Stockfish in your
+browser. It shows:
 
-- Partien kommen von der Lichess-API (`/api/games/user/{name}`, NDJSON-Stream).
-- Partien mit Lichess-Analyse nutzen deren Bewertungen. Alle anderen analysiert Stockfish 19 lite (WASM, single-threaded) in mehreren Web Workern.
-- Daten liegen in IndexedDB. Export und Import als JSON (versioniert).
+- the patterns that come back across the 10 games, for example "Hanging pieces: 4/10 games",
+- the top errors of your latest game, with the best move and the engine line on the board,
+- the good moves of that game,
+- one or two rules for your next games.
 
-## Entwicklung
+No account, no server. Your games go from Lichess or Chess.com straight to your browser.
+
+## Use
+
+1. Enter your username and pick Lichess or Chess.com.
+2. Press "Analyze last 10 games". The latest game comes first; the pattern counts grow while the others run.
+3. Click an error or a good move. The board shows the position, your move (red) and the best move (green).
+4. Press "Best line" or "Your move and the reply" to play the engine line. Use ← and → to step.
+5. Pick another game in the "Game" list. A deeper analysis of that game starts.
+
+## Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run check` führt Lint, Typprüfung, Build und Tests aus.
+`npm run check` runs lint, type check, build and tests. See [CLAUDE.md](CLAUDE.md) and [spec/](spec/) for the
+architecture, the rules and the decisions.
 
 ## Deployment
 
-`npm run build` erzeugt `dist/` mit relativen Pfaden. Der Ordner läuft auf Vercel und auf GitHub Pages (auch unter einem Unterpfad). Die Engine braucht keine besonderen HTTP-Header.
+`npm run build` writes `dist/` with relative paths. It runs on any static host, also under a sub-path. A push to
+`main` deploys to GitHub Pages. The engine needs no special HTTP headers.
