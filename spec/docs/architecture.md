@@ -64,10 +64,16 @@ deep result replaces the quick one; a result never replaces a deeper one.
 - `MoveEval` holds `cpBefore`, `cpAfter` from the mover's point of view, and `cpl = max(0, cpBefore − cpAfter)`.
 - A blunder: `cpl ≥ 150`, `cpAfter < 500` (the mover is not still clearly winning), and the move is not the engine's
   best move.
+- A missed mate: the mover had a forced mate in 3 or less, plays another move, and has no forced mate after it. It is
+  an error even when the mover is still winning ([ADR 0007](../adrs/0007-missed-mates-are-errors.md)). `MoveEval`
+  keeps `mateBefore`/`mateAfter` from the mover's point of view for this.
+- An error is a blunder or a missed mate. Top errors list blunders first (by cpl), then missed mates.
 
 ## Tags
 
-`tagBlunder()` tests the rules in this order. The first match wins; one tag per blunder.
+`tagBlunder()` tests the rules in this order. The first match wins; one tag per error. A missed mate that is not
+also a blunder gets `MISSED_MATE` at once. `tagVia` notes which engine move shows the pattern: the best move the user
+missed, or the reply the user allowed.
 
 | Order | Tag | Rule |
 | --- | --- | --- |
@@ -77,8 +83,23 @@ deep result replaces the quick one; a result never replaces a deeper one.
 | 4 | `HANGING_PIECE` | The moved piece is hanging (more attackers than defenders, or a cheaper attacker), or the reply or the next game move takes a hanging piece worth 3+ |
 | 5 | `MISSED_FORK` | The engine's best move attacks two targets: the king, a piece worth more, or an undefended piece worth 3+ |
 | 6 | `PIN_EXPLOIT` | The engine's best move pins a piece to the king or to a piece worth more. A pawn counts only when pinned to the king |
+| 7 | `MISSED_MATE` | The mover had a mate in 3 or less and has none after the move |
+| 8 | `ALLOWED_MATE` | The opponent has a forced mate after the move and had none before |
+| 9 | `ALLOWED_FORK` | The engine's reply forks two targets of the mover (same target rule as `MISSED_FORK`) |
+| 10 | `DISCOVERED_ATTACK` | The reply (allowed) or the best move (missed) leaves a line, and a slider behind it now attacks the king or a piece worth more than the slider |
+| 11 | `MISSED_CAPTURE` | The best move takes a hanging piece worth 3+, and the played move takes nothing |
+| 12 | `HANGING_PIECE` | The reply line wins 2+ points of material for the opponent (`lineGain()`) |
+| 13 | `MISSED_CAPTURE` | The best line wins 2+ points of material for the mover, and the played move takes nothing |
+| 14 | `MISSED_CAPTURE` | The best line wins a pawn for the mover, and the played move takes nothing. The error itself guarantees the swing of 150 cp; the text says "wins a pawn" |
 
-A blunder that matches no rule stays untagged and reads "Tactical error. Best was …".
+`lineGain()` plays up to 8 plies of an engine line and counts the material at the last quiet move, so a capture whose
+recapture is still to come does not count. Rules 12 to 14 catch what the static checks miss: defenders behind
+another piece (x-ray), and wins that start with a quiet move.
+
+An error that matches no rule stays untagged and reads "Tactical error. Best was …". The pattern section shows how
+many errors are untagged ("Other errors: 7 of 22 blunders have no known pattern."). In the measurement
+([PRD 0003](../prds/0003-more-tactical-tags.md)), 9 of 39 errors stayed untagged (23 %); they change material by less than
+a pawn.
 
 Opening traps match the whole move order, without the "ply ≤ 10" limit of the spec: the Englund trap 6. Bc3 is ply 11.
 
@@ -106,8 +127,8 @@ two rules for that tag from `RULES`. With errors but no tag: one generic blunder
 - Header: username, platform, analyze/stop, progress bar ("Analyzing game 4/10"), game selector.
 - Left panel, `BoardView`: players, board in the user's orientation, step controls, the move list with `??`/`!`
   marks. Keyboard: ←, →, Home, End (not while focus is in a form field).
-- Right panel, `FeedbackPanel`: pattern pills, good moves, top errors, rules. Good moves come first, so the report
-  opens with what went right.
+- Right panel, `FeedbackPanel`: good moves, top errors, rules, then the pattern pills of all games. Good moves come
+  first, so the report opens with what went right.
 - `BoardState` lives in `App`: `{ ply, node?, branch? }`. A click on a feedback card sets `ply` to the move and shows
   the node's arrows (red: played, green: best) and highlight squares. A branch button plays an engine line from that
   position, one move per 900 ms; the step buttons then move inside the branch until "Back to game".

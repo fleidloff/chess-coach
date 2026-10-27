@@ -97,3 +97,52 @@ test('builds the report for the winning side', () => {
   )
   assert.deepEqual(report.actionableDrills, [])
 })
+
+test('tags the patterns of PRD 0003', () => {
+  const backRankMate = tagBlunder({ moves: ['h3'], ply: 0, fenBefore: '6k1/5ppp/8/8/8/8/5PPP/3Q2K1 w - - 0 1', bestMoveUci: 'd1d8', mateBefore: 1 })
+  assert.deepEqual(backRankMate, { tag: 'MISSED_MATE', squares: ['d8'], via: 'best' })
+  const smothered = tagBlunder({ moves: ['a3'], ply: 0, fenBefore: '6k1/8/8/8/6n1/8/P5PP/6RK w - - 0 1', replyUci: 'g4f2', mateAfter: -1 })
+  assert.equal(smothered?.tag, 'ALLOWED_MATE')
+  assert.deepEqual(tag('4k3/8/8/8/1n6/8/3K4/R7 w - - 0 1', 'Ke3', undefined, 'b4c2'), {
+    tag: 'ALLOWED_FORK',
+    squares: ['c2', 'e3', 'a1'],
+    via: 'reply',
+  })
+  assert.deepEqual(tag('b3k3/8/8/3n4/8/8/P7/K6Q w - - 0 1', 'a3', undefined, 'd5f4'), {
+    tag: 'DISCOVERED_ATTACK',
+    squares: ['d5', 'h1'],
+    via: 'reply',
+  })
+  assert.deepEqual(tag('7k/8/8/3n4/8/8/P7/3R2K1 w - - 0 1', 'a3', 'd1d5'), { tag: 'MISSED_CAPTURE', squares: ['d5'], via: 'best' })
+})
+
+test('a lost mate is an error even in a won position', () => {
+  const won = { ...game('white'), id: 'mate', moves: ['e4'] }
+  const result = aggregate([won], new Map([['mate', { depth: 14, positions: [p(undefined, ['d2d4'], 2), p(600, ['e7e5'])] }]]))
+  const [error] = result.reports.get('mate')!.topErrors
+  assert.equal(error.tag, 'MISSED_MATE')
+  assert.equal(error.summary, 'Misses mate: d4 mates in 2.')
+  assert.deepEqual([result.errorCount, result.untaggedCount], [1, 0])
+})
+
+test('counts material along the engine line, so x-ray defenders do not hide a loss', () => {
+  // From a real game: ...b6 opens the long diagonal, and Qxa8 Qxa8 Bxa8 wins the exchange.
+  const fenBefore = 'r2q1rk1/pp1n1ppp/8/3Q4/8/5B1P/PP3PP1/2R2RK1 b - - 0 17'
+  const result = tagBlunder({ moves: ['b6'], ply: 0, fenBefore, replyUci: 'd5a8', replyLine: ['d5a8', 'd8a8', 'f3a8', 'd7f6'] })
+  assert.deepEqual(result, { tag: 'HANGING_PIECE', squares: ['a8'], via: 'reply', material: 5 })
+})
+
+test('a pawn that the best line wins counts as a missed capture', () => {
+  // From a real game: 7... g6 misses the Nxe4 trick.
+  const fenBefore = 'r1bqkb1r/p3pppp/2pp1n2/8/2B1P3/8/PPP2PPP/RNBQ1RK1 b kq - 1 7'
+  const result = tagBlunder({
+    moves: ['g6'],
+    ply: 0,
+    fenBefore,
+    bestMoveUci: 'f6e4',
+    bestLine: ['f6e4', 'c4e2', 'e4f6', 'c2c4', 'e7e5'],
+    replyUci: 'e4e5',
+    replyLine: ['e4e5', 'f6e4', 'e5d6', 'e4d6', 'd1d4'],
+  })
+  assert.deepEqual(result, { tag: 'MISSED_CAPTURE', squares: ['e4'], via: 'best', material: 1 })
+})

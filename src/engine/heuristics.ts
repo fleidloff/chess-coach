@@ -119,6 +119,49 @@ function boxedIn(chess: Chess, color: ChessColor): boolean {
     .every(sq => chess.get(sq)?.color === color)
 }
 
+/** Targets that a slider attacks only because the move left its line: the king, or a piece worth more than the slider. */
+export function discoveredTargets(before: Chess, after: Chess, move: Move): Square[] {
+  const enemy = enemyOf(move.color)
+  return after
+    .board()
+    .flat()
+    .filter(p => p && p.color === enemy)
+    .filter(p =>
+      after.attackers(p!.square, move.color).some(sq => {
+        const slider = after.get(sq)!
+        if (sq === move.to || !RAYS[slider.type]) return false
+        if (p!.type !== 'k' && VALUE[p!.type] <= VALUE[slider.type]) return false
+        return !before.attackers(p!.square, move.color).includes(sq)
+      }),
+    )
+    .map(p => p!.square)
+}
+
+/**
+ * Material the side to move wins along an engine line, counted at the last quiet move within `max` plies, so that a
+ * capture whose recapture is still to come does not count. Also the square of that side's first capture.
+ */
+export function lineGain(fen: string, line: string[], max = 8): { gain: number; square?: Square } {
+  const chess = new Chess(fen)
+  const side = chess.turn()
+  let net = 0
+  let settled = 0
+  let square: Square | undefined
+  for (const uci of line.slice(0, max)) {
+    let m: Move
+    try {
+      m = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] })
+    } catch {
+      break
+    }
+    const value = (m.captured ? VALUE[m.captured] : 0) + (m.promotion ? VALUE[m.promotion] - 1 : 0)
+    net += m.color === side ? value : -value
+    if (m.captured && m.color === side) square ??= m.to
+    if (!m.captured) settled = net
+  }
+  return { gain: settled, square }
+}
+
 const pressure = (chess: Chess, sq: Square, color: ChessColor) =>
   chess.attackers(sq, enemyOf(color)).length - chess.attackers(sq, color).length
 
@@ -131,12 +174,30 @@ export interface BlunderContext {
   bestMoveUci?: string
   /** Engine best reply after the blunder, UCI. */
   replyUci?: string
+  /** Engine lines in UCI: from fenBefore, and from the position after the move. */
+  bestLine?: string[]
+  replyLine?: string[]
+  /** Forced mate in moves from the mover's point of view, before and after the move: + mover mates, − mover is mated. */
+  mateBefore?: number
+  mateAfter?: number
 }
 
 export interface TagResult {
   tag: TacticalTag
   squares: Square[]
+  /** Which engine move shows the pattern: the best move the mover missed, or the reply the move allowed. */
+  via?: 'best' | 'reply'
+  /** Material points the engine line wins, for the rules that count it. */
+  material?: number
 }
+
+export const MATE_HORIZON = 3
+/** A minor piece for a pawn, or the exchange. */
+const MATERIAL_SWING = 2
+
+/** The mover had a forced mate in 3 or less and lost it. */
+export const lostMate = (mateBefore?: number, mateAfter?: number) =>
+  mateBefore !== undefined && mateBefore > 0 && mateBefore <= MATE_HORIZON && !(mateAfter !== undefined && mateAfter > 0)
 
 /** Names the pattern behind a blunder. The first rule that matches wins, from the most to the least specific. */
 export function tagBlunder(ctx: BlunderContext): TagResult | undefined {
@@ -177,6 +238,36 @@ export function tagBlunder(ctx: BlunderContext): TagResult | undefined {
     if (targets.length) return { tag: 'MISSED_FORK', squares: [best.move.to, ...targets] }
     const pinned = pinnedSquare(best.chess, best.move)
     if (pinned) return { tag: 'PIN_EXPLOIT', squares: [best.move.to, pinned] }
+  }
+
+  if (best && lostMate(ctx.mateBefore, ctx.mateAfter)) return { tag: 'MISSED_MATE', squares: [best.move.to], via: 'best' }
+  const wasMated = ctx.mateBefore !== undefined && ctx.mateBefore < 0
+  if (ctx.mateAfter !== undefined && ctx.mateAfter < 0 && !wasMated) {
+    return { tag: 'ALLOWED_MATE', squares: reply ? [reply.move.to] : [], via: 'reply' }
+  }
+  if (reply) {
+    const targets = forkTargets(reply.chess, reply.move)
+    if (targets.length) return { tag: 'ALLOWED_FORK', squares: [reply.move.to, ...targets], via: 'reply' }
+    const revealed = discoveredTargets(after, reply.chess, reply.move)
+    if (revealed.length) return { tag: 'DISCOVERED_ATTACK', squares: [reply.move.from, ...revealed], via: 'reply' }
+  }
+  if (best && best.move.san !== move.san) {
+    const revealed = discoveredTargets(before, best.chess, best.move)
+    if (revealed.length) return { tag: 'DISCOVERED_ATTACK', squares: [best.move.from, ...revealed], via: 'best' }
+    const captured = best.move.captured
+    if (captured && VALUE[captured] >= 3 && !move.captured && isHanging(before, best.move.to)) {
+      return { tag: 'MISSED_CAPTURE', squares: [best.move.to], via: 'best' }
+    }
+  }
+
+  const lost = lineGain(fenAfter, ctx.replyLine ?? [])
+  if (lost.gain >= MATERIAL_SWING) {
+    return { tag: 'HANGING_PIECE', squares: lost.square ? [lost.square] : [], via: 'reply', material: lost.gain }
+  }
+  // Callers pass only errors, so a pawn here comes with a swing of 150 cp or more.
+  const missed = lineGain(ctx.fenBefore, ctx.bestLine ?? [])
+  if (missed.gain >= 1 && !move.captured) {
+    return { tag: 'MISSED_CAPTURE', squares: missed.square ? [missed.square] : [], via: 'best', material: missed.gain }
   }
 }
 

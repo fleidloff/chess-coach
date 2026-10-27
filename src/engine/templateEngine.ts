@@ -9,6 +9,11 @@ export const TAG_LABEL: Record<TacticalTag, string> = {
   PIN_EXPLOIT: 'Missed pins',
   BACK_RANK_WEAKNESS: 'Back-rank weakness',
   OPENING_TRAP: 'Opening traps',
+  MISSED_MATE: 'Missed mates',
+  ALLOWED_MATE: 'Allowed mates',
+  ALLOWED_FORK: 'Allowed forks',
+  DISCOVERED_ATTACK: 'Discovered attacks',
+  MISSED_CAPTURE: 'Missed captures',
 }
 
 export const KIND_LABEL: Record<GoodMoveKind, string> = {
@@ -43,6 +48,17 @@ export function generateErrorSummary(move: MoveEval, moves: string[]): string {
       return `Misses the pin ${best}.`
     case 'BACK_RANK_WEAKNESS':
       return `Leaves the back rank open to a check. Best was ${best}.`
+    case 'MISSED_MATE':
+      return `Misses mate: ${best} mates in ${move.mateBefore}.`
+    case 'ALLOWED_MATE':
+      return `Walks into a forced mate. Best was ${best}.`
+    case 'ALLOWED_FORK':
+      return `Allows the fork ${move.reply[0]}.`
+    case 'DISCOVERED_ATTACK':
+      return move.tagVia === 'reply' ? `Allows the discovered attack ${move.reply[0]}.` : `Misses the discovered attack ${best}.`
+    case 'MISSED_CAPTURE':
+      if (move.tagMaterial === 1) return `Misses ${best}, which wins a pawn.`
+      return best.includes('x') ? `Misses the free capture ${best}.` : `Misses ${best}, which wins material.`
     default:
       return `Tactical error. Best was ${best}.`
   }
@@ -97,6 +113,26 @@ export const RULES: Record<TacticalTag, [string, string]> = {
   OPENING_TRAP: [
     'Study the trap from the error card: play the first moves on the board until you know the refutation.',
     'In the opening, when the opponent offers material too easily, look for the trap before you take.',
+  ],
+  MISSED_MATE: [
+    'When you are winning, look at every check first. A forced mate ends the game at once.',
+    'Before a slow winning move, count the checks and captures near the enemy king.',
+  ],
+  ALLOWED_MATE: [
+    'Before each move, ask: which checks does my opponent get after it?',
+    'When enemy pieces aim at your king, bring one more defender before you attack.',
+  ],
+  ALLOWED_FORK: [
+    'Before each move, look at the squares an enemy knight or queen reaches next move.',
+    'Do not leave two pieces loose. A loose piece is a fork target.',
+  ],
+  DISCOVERED_ATTACK: [
+    'When an enemy bishop, rook or queen stands behind its own piece, ask what that piece reveals when it moves.',
+    'Look for your own hidden lines: move a piece off the line of your rook or bishop with a threat.',
+  ],
+  MISSED_CAPTURE: [
+    'After each move of your opponent, ask: did a piece of theirs become loose? Take free material.',
+    'Count attackers and defenders of every enemy piece you attack.',
   ],
 }
 

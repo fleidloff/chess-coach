@@ -267,6 +267,8 @@ export default function App() {
               tagFrequencies={batch.tagFrequencies}
               analysedGames={scanned}
               totalGames={games.length}
+              errorCount={batch.errorCount}
+              untaggedCount={batch.untaggedCount}
               deepening={deepening}
               selected={board.node}
               onSelect={node => setBoard({ ply: node.ply, node })}

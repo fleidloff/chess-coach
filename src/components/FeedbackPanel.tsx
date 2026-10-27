@@ -8,6 +8,8 @@ interface Props {
   tagFrequencies: Record<TacticalTag, number>
   analysedGames: number
   totalGames: number
+  errorCount: number
+  untaggedCount: number
   deepening: boolean
   selected?: FeedbackNode
   onSelect: (node: FeedbackNode) => void
@@ -50,42 +52,22 @@ function NodeCard({ node, good, total, selected, onSelect }: { node: FeedbackNod
   )
 }
 
-export function FeedbackPanel({ report, tagFrequencies, analysedGames, totalGames, deepening, selected, onSelect }: Props) {
+export function FeedbackPanel({
+  report,
+  tagFrequencies,
+  analysedGames,
+  totalGames,
+  errorCount,
+  untaggedCount,
+  deepening,
+  selected,
+  onSelect,
+}: Props) {
   const tags = (Object.keys(tagFrequencies) as TacticalTag[]).filter(t => tagFrequencies[t] > 0).sort((a, b) => tagFrequencies[b] - tagFrequencies[a])
   const scanning = analysedGames < totalGames
 
   return (
     <div className="flex flex-col gap-6">
-      <section aria-labelledby="patterns">
-        <h2 id="patterns" className={heading}>
-          <AlertTriangle className="size-4" aria-hidden /> Patterns in your last {totalGames} games
-        </h2>
-        {tags.length > 0 && (
-          <ul className="flex flex-wrap gap-1.5">
-            {tags.map(t => (
-              <li
-                key={t}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                  tagFrequencies[t] >= 2
-                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
-                    : 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300'
-                }`}
-              >
-                {tagFrequencies[t] >= 2 && <AlertTriangle className="size-3" aria-hidden />}
-                {TAG_LABEL[t]}: {tagFrequencies[t]}/{totalGames} games
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
-          {scanning
-            ? `Scanned ${analysedGames}/${totalGames} games. The counts grow while the scan runs.`
-            : tags.length
-              ? 'Counts the games in which each pattern appears at least once.'
-              : 'No recurring tactical pattern found. Well played.'}
-        </p>
-      </section>
-
       {!report ? (
         <p className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
           <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> Analyzing this game…
@@ -143,6 +125,43 @@ export function FeedbackPanel({ report, tagFrequencies, analysedGames, totalGame
           )}
         </>
       )}
+
+      <section aria-labelledby="patterns">
+        <h2 id="patterns" className={heading}>
+          <AlertTriangle className="size-4" aria-hidden /> Patterns in your last {totalGames} games
+        </h2>
+        {tags.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5">
+            {tags.map(t => (
+              <li
+                key={t}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                  tagFrequencies[t] >= 2
+                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
+                    : 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300'
+                }`}
+              >
+                {tagFrequencies[t] >= 2 && <AlertTriangle className="size-3" aria-hidden />}
+                {TAG_LABEL[t]}: {tagFrequencies[t]}/{totalGames} games
+              </li>
+            ))}
+          </ul>
+        )}
+        {untaggedCount > 0 && (
+          <p className="mt-1.5 text-xs text-stone-600 dark:text-stone-300">
+            Other errors: {untaggedCount} of {errorCount} blunders have no known pattern.
+          </p>
+        )}
+        <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+          {scanning
+            ? `Scanned ${analysedGames}/${totalGames} games. The counts grow while the scan runs.`
+            : tags.length
+              ? 'Counts the games in which each pattern appears at least once.'
+              : errorCount
+                ? 'No recurring tactical pattern found.'
+                : 'No blunder in these games. Well played.'}
+        </p>
+      </section>
     </div>
   )
 }

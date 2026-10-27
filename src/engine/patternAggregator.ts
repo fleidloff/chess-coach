@@ -9,7 +9,7 @@ import type {
   Score,
   TacticalTag,
 } from '../types/chess.ts'
-import { moveFeatures, playMove, tagBlunder, uciToSan } from './heuristics.ts'
+import { lostMate, moveFeatures, playMove, tagBlunder, type TagResult, uciToSan } from './heuristics.ts'
 import {
   conversionSummary,
   generateErrorSummary,
@@ -36,6 +36,11 @@ export function toCp(s: Score): number {
 
 /** A move that loses 150 cp or more, unless the mover is still clearly winning after it. */
 export const isBlunder = (m: MoveEval) => m.cpl >= BLUNDER_CPL && m.cpAfter < 500 && m.bestMoveSan !== m.san
+
+/** A lost mate in 3 or less is an error even when the mover is still winning (PRD 0003). */
+export const isMissedMate = (m: MoveEval) => m.bestMoveSan !== m.san && lostMate(m.mateBefore, m.mateAfter)
+
+export const isError = (m: MoveEval) => isBlunder(m) || isMissedMate(m)
 
 export function evaluateMoves(game: ParsedGame, evals: GameEvals): MoveEval[] {
   const chess = new Chess()
@@ -66,11 +71,28 @@ export function evaluateMoves(game: ParsedGame, evals: GameEvals): MoveEval[] {
       bestLine,
       reply: uciToSan(fenAfter, after.pv),
       cpSecond: before.second && sign * toCp(before.second),
+      mateBefore: before.score.mate === undefined ? undefined : sign * before.score.mate,
+      mateAfter: after.score.mate === undefined ? undefined : sign * after.score.mate,
     }
-    if (color === game.userColor && isBlunder(move)) {
-      const tagged = tagBlunder({ moves: game.moves, ply, fenBefore, bestMoveUci: before.pv[0], replyUci: after.pv[0] })
+    if (color === game.userColor && isError(move)) {
+      const bestTo = move.bestMoveUci?.slice(2, 4)
+      const tagged: (Omit<TagResult, 'squares'> & { squares: string[] }) | undefined = isBlunder(move)
+        ? tagBlunder({
+            moves: game.moves,
+            ply,
+            fenBefore,
+            bestMoveUci: before.pv[0],
+            replyUci: after.pv[0],
+            bestLine: before.pv,
+            replyLine: after.pv,
+            mateBefore: move.mateBefore,
+            mateAfter: move.mateAfter,
+          })
+        : { tag: 'MISSED_MATE' as const, squares: bestTo ? [bestTo] : [], via: 'best' as const }
       move.tag = tagged?.tag
       move.tagSquares = tagged?.squares
+      move.tagVia = tagged?.via
+      move.tagMaterial = tagged?.material
     }
     out.push(move)
   })
@@ -146,7 +168,7 @@ export function topTag(freq: Record<TacticalTag, number>, inGame: Set<TacticalTa
 }
 
 export function buildReport(game: ParsedGame, evals: GameEvals, moves: MoveEval[], freq: Record<TacticalTag, number>): GameReport {
-  const errors = moves.filter(m => m.color === game.userColor && isBlunder(m))
+  const errors = moves.filter(m => m.color === game.userColor && isError(m))
   const top = topTag(freq, new Set(errors.flatMap(m => (m.tag ? [m.tag] : []))))
   return {
     gameId: game.id,
@@ -155,7 +177,7 @@ export function buildReport(game: ParsedGame, evals: GameEvals, moves: MoveEval[
     result: game.result,
     depth: evals.depth,
     topErrors: errors
-      .sort((a, b) => b.cpl - a.cpl)
+      .sort((a, b) => Number(isBlunder(b)) - Number(isBlunder(a)) || b.cpl - a.cpl)
       .slice(0, MAX_ITEMS)
       .map(m => errorNode(m, game.moves, freq)),
     goodMoves: goodMoves(game, moves),
@@ -176,8 +198,11 @@ export function aggregate(games: ParsedGame[], evals: Map<string, GameEvals>): B
   for (const { moves } of analysed) {
     for (const tag of new Set(moves.flatMap(m => (m.tag ? [m.tag] : [])))) tagFrequencies[tag]++
   }
+  const errors = analysed.flatMap(a => a.moves.filter(m => m.color === a.game.userColor && isError(m)))
   return {
     tagFrequencies,
+    errorCount: errors.length,
+    untaggedCount: errors.filter(m => !m.tag).length,
     analysedGames: analysed.length,
     reports: new Map(analysed.map(a => [a.game.id, buildReport(a.game, a.evals, a.moves, tagFrequencies)])),
   }

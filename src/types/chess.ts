@@ -9,6 +9,11 @@ export type TacticalTag =
   | 'PIN_EXPLOIT'
   | 'BACK_RANK_WEAKNESS'
   | 'OPENING_TRAP'
+  | 'MISSED_MATE'
+  | 'ALLOWED_MATE'
+  | 'ALLOWED_FORK'
+  | 'DISCOVERED_ATTACK'
+  | 'MISSED_CAPTURE'
 
 export type GoodMoveKind = 'TACTICAL_STRIKE' | 'DEFENSIVE_SAVE' | 'CLEAN_CONVERSION'
 
@@ -70,9 +75,15 @@ export interface MoveEval {
   reply: string[]
   /** Centipawns of the second-best move from the mover's point of view (deep analysis only). */
   cpSecond?: number
+  /** Forced mate in moves from the mover's point of view: + mover mates, − mover is mated. */
+  mateBefore?: number
+  mateAfter?: number
   tag?: TacticalTag
   /** Squares that show the tagged pattern. */
   tagSquares?: string[]
+  tagVia?: 'best' | 'reply'
+  /** Material points the engine line wins, when the tag comes from counting it. */
+  tagMaterial?: number
 }
 
 export interface Branch {
@@ -112,6 +123,9 @@ export interface GameReport {
 export interface BatchAnalysisResult {
   /** Number of analysed games that contain each tag. */
   tagFrequencies: Record<TacticalTag, number>
+  /** User errors in all analysed games, and how many of them have no tag. */
+  errorCount: number
+  untaggedCount: number
   analysedGames: number
   /** gameId to report. */
   reports: Map<string, GameReport>
