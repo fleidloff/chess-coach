@@ -61,8 +61,10 @@ of hundreds of games, plans, puzzles.
 
 ## Out of scope
 
-- More than 10 games, filters by time control, accounts, storage of analyses ([ADR 0005](../adrs/0005-no-stored-analysis.md)).
-- Puzzles and training plans (the old app, [ADR 0001](../adrs/0001-rebuild-on-the-focused-spec.md)).
+- More than 10 games, filters by time control, accounts.
+- Storage of analyses ([ADR 0005](../adrs/0005-no-stored-analysis.md)); planned in [PRD 0002](0002-analysis-cache.md).
+- Training on own positions; planned in [PRD 0004](0004-train-your-own-blunders.md). Training plans of the old app
+  ([ADR 0001](../adrs/0001-rebuild-on-the-focused-spec.md)).
 
 ## Deviations from the original prompt
 

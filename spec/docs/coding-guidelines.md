@@ -27,6 +27,8 @@ types/chess.ts  <-  services/*  <-  App.tsx  ->  components/*
 - `services/` fetch and normalize. They know nothing about the engine or the UI.
 - `engine/` is pure TypeScript: no DOM, no React, no `fetch`. The one exception is `stockfishWorker.ts`, the only
   file that creates a `Worker` or reads `import.meta.env`. Do not import it from a test.
+- `services/analysisStore.ts` is the only file that touches IndexedDB. Its pure logic lives in `storeRecords.ts`.
+  Do not import `analysisStore.ts` from a test.
 - `components/` render props. They do not fetch and do not start the engine.
 - `App.tsx` owns the state: settings, games, evaluations, the selected game, the board state.
 
@@ -71,6 +73,10 @@ types/chess.ts  <-  services/*  <-  App.tsx  ->  components/*
 - An aborted fetch is not an error. Check `signal.aborted` before you show anything.
 - `localStorage` holds only the username and the platform, under a versioned key. Read in `try/catch`, validate the
   shape, fall back to defaults. The app must work when storage is blocked.
+- Every IndexedDB record has `schema`. A new schema needs a reader or a drop rule for the old one, and a test.
+  Validate every record on read; never show one that fails.
+- Change `ENGINE_ID` in `storeRecords.ts` when the engine changes, so old evaluations are not reused.
+- A failed storage call never stops the analysis. Catch it and show the quiet note.
 
 ## Code style
 

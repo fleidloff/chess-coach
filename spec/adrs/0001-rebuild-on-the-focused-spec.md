@@ -29,8 +29,8 @@ mistakes list, training plans, puzzles, and the Lichess server-analysis shortcut
 
 ## Consequences
 
-- The old features are in git history (`ac2bf49`) if one comes back. Puzzles are an idea in
-  [experiment PRD 0003](../experiment-prds/0003-puzzles-from-own-blunders.md).
+- The old features are in git history (`ac2bf49`) if one comes back. Puzzles come back as
+  [PRD 0004](../prds/0004-train-your-own-blunders.md) (planned).
 - Data that old users stored in IndexedDB (`chess-coach` database) is not read anymore. It stays in their browser.
 - Lichess games with server analysis now also go through the local engine. This costs time, but every game gets the
   same depth and the same best-move data.

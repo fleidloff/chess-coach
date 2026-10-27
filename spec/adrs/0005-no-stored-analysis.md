@@ -1,8 +1,8 @@
 # 0005: Keep games and evaluations in memory only
 
-- Status: proposed
+- Status: superseded by [0006](0006-store-analyses-in-indexeddb.md)
 - Date: 2026-10-27
-- Related: [PRD 0001](../prds/0001-chess-coach.md), [experiment PRD 0001](../experiment-prds/0001-analysis-cache.md)
+- Related: [PRD 0001](../prds/0001-chess-coach.md), [PRD 0002](../prds/0002-analysis-cache.md) (planned)
 
 ## Context
 

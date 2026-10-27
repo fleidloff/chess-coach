@@ -11,6 +11,8 @@ server and no LLM. The product spec is [PRD 0001](../prds/0001-chess-coach.md).
 | `src/types/chess.ts` | Shared types: `ParsedGame`, `Score`, `GameEvals`, `MoveEval`, `FeedbackNode`, `GameReport` |
 | `src/services/lichessApi.ts` | `GET /api/games/user/{name}` (NDJSON). Keeps standard, finished games. `userColor` from `players.*.user.id` |
 | `src/services/chessComApi.ts` | `GET /pub/player/{name}/games/archives`, then the monthly archives from newest to oldest until it has 10 games |
+| `src/services/analysisStore.ts` | IndexedDB access: load and save game lists and evaluations, evict old games, delete everything |
+| `src/services/storeRecords.ts` | Stored record shapes, keys, validation, reuse and eviction rules (pure, tested in Node) |
 | `src/engine/stockfishWorker.ts` | `EnginePool`: up to 4 Stockfish workers and a priority queue of positions. `analyseGame()` |
 | `src/engine/uci.ts` | Parses UCI `info` lines to White-relative scores. Scores finished positions without the engine |
 | `src/engine/heuristics.ts` | Board rules on `chess.js`: hanging piece, fork targets, pins, back rank, f2/f7. `tagBlunder()` |
@@ -23,13 +25,14 @@ server and no LLM. The product spec is [PRD 0001](../prds/0001-chess-coach.md).
 ## Data flow
 
 ```
-UsernameInput ─► fetch*Games() ─► ParsedGame[10]
-                                     │
-                    EnginePool ◄─────┘ analyseGame(): one job per position
+UsernameInput ─► loadGames() + loadEvals() ─► stored report at once
+              └─► fetch*Games() ─► ParsedGame[10] ─► saveGames(), evictOld()
+                                     │  loadEvals(): stored evaluations with enough depth are reused
+                    EnginePool ◄─────┘ analyseGame() for the rest: one job per position
                          │              game 1: depth 14, MultiPV 2, priority 0
                          │              games 2–10: depth 10, MultiPV 1, priority 1
                          ▼
-               Map<gameId, GameEvals>  (React state, grows as games finish)
+               Map<gameId, GameEvals>  (React state, grows as games finish; each result goes to saveEvals())
                          │
                 aggregate() in useMemo
                          │  evaluateMoves() ─► MoveEval[] (+ tagBlunder)
@@ -112,8 +115,24 @@ two rules for that tag from `RULES`. With errors but no tag: one generic blunder
 
 ## Storage
 
-Only `chess-coach:v1` in `localStorage`: `{ username, platform }`. Games and evaluations live in memory and are gone on
-reload ([ADR 0005](../adrs/0005-no-stored-analysis.md)).
+[ADR 0006](../adrs/0006-store-analyses-in-indexeddb.md), [PRD 0002](../prds/0002-analysis-cache.md).
+
+- `localStorage` key `chess-coach:v1`: `{ username, platform }` of the last run.
+- IndexedDB `chess-coach-analysis`, version 1:
+
+| Store | Key | Value |
+| --- | --- | --- |
+| `games` | `platform:username` (lower case) | `{ schema: 1, key, games: ParsedGame[], fetchedAt }` |
+| `evals` | `platform:gameId` | `{ schema: 1, key, owner, date, engine, depth, positions, savedAt }` |
+
+- On start, when the saved user has a stored game list, `App` shows it with its stored evaluations, then fetches.
+- A stored evaluation is reused when `engine` equals `ENGINE_ID` and its depth is enough: depth 14 for the shown game,
+  10 for the others. A deeper result always replaces a shallower one.
+- Every read validates the shape; a record that fails is deleted. Evaluations of one user beyond the newest 50 games
+  are deleted after each fetch.
+- Storage errors never stop the analysis. The header shows one note. "Delete stored data" deletes the database and the
+  `localStorage` key.
+- The old database `chess-coach` of the first app is never opened.
 
 ## Deployment
 

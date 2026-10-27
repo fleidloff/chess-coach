@@ -8,7 +8,9 @@ browser. It shows:
 - the good moves of that game,
 - one or two rules for your next games.
 
-No account, no server. Your games go from Lichess or Chess.com straight to your browser.
+No account, no server. Your games go from Lichess or Chess.com straight to your browser. The browser keeps the
+analyses, so the next visit shows your last report at once and analyses only new games. "Delete stored data" in the
+header removes everything.
 
 ## Use
 
