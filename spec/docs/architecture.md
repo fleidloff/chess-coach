@@ -68,7 +68,8 @@ deep result replaces the quick one; a result never replaces a deeper one.
 - A missed mate: the mover had a forced mate in 3 or less, plays another move, and has no forced mate after it. It is
   an error even when the mover is still winning ([ADR 0007](../adrs/0007-missed-mates-are-errors.md)). `MoveEval`
   keeps `mateBefore`/`mateAfter` from the mover's point of view for this.
-- An error is a blunder or a missed mate. Top errors list blunders first (by cpl), then missed mates.
+- An error is a blunder or a missed mate. Top errors pick the three worst: blunders first (by cpl), then missed mates.
+  The list shows them in game order ([PRD 0005](../prds/0005-cards-in-game-order.md)).
 
 ## Tags
 
@@ -116,7 +117,7 @@ For each user move with `cpl ≤ 30`, the first match:
 4. Only move while better: `TACTICAL_STRIKE`.
 5. A capture that keeps ≥ +3.0 in a game the user won: `CLEAN_CONVERSION`, score 50, at most one.
 
-The three with the highest score are shown.
+The three with the highest score are shown, in game order ([PRD 0005](../prds/0005-cards-in-game-order.md)).
 
 ## Rules for the next games
 

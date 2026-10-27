@@ -161,3 +161,22 @@ test('picks training positions and judges a move against the best move', () => {
   assert.deepEqual(judge('black', { cp: -40 }, { cp: -10 }), { correct: true, cp: 10, loss: 30 })
   assert.deepEqual(judge('white', { cp: 200 }, { mate: -2 }), { correct: false, cp: -1000, loss: 1200 })
 })
+
+test('picks the worst errors and the best good moves, then lists them in game order', () => {
+  // White drops 200, 180, 320 and 160 cp on plies 0, 2, 4 and 6; Black answers each drop with the best move.
+  const moves = ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'c3', 'Nf6', 'd4', 'exd4']
+  const cps = [0, -200, -200, -380, -380, -700, -700, -860, -860, -860, -860]
+  const positions = cps.map((cp, i) => p(cp, [i % 2 ? 'a7a6' : 'd2d4']))
+  const result = aggregate(
+    [
+      { ...game('white'), id: 'w', moves },
+      { ...game('black'), id: 'b', moves },
+    ],
+    new Map([
+      ['w', { depth: 14, positions }],
+      ['b', { depth: 14, positions }],
+    ]),
+  )
+  assert.deepEqual(result.reports.get('w')!.topErrors.map(e => e.ply), [0, 2, 4])
+  assert.deepEqual(result.reports.get('b')!.goodMoves.map(g => g.ply), [1, 3, 5])
+})

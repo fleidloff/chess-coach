@@ -10,7 +10,7 @@ This is Frederik's own project. The product spec is [PRD 0001](spec/prds/0001-ch
 
 - [spec/docs/architecture.md](spec/docs/architecture.md): modules, the analysis pipeline, scores, tags, the UI.
 - [spec/docs/coding-guidelines.md](spec/docs/coding-guidelines.md): project rules. They override general habits.
-- [spec/prds/](spec/prds/): what the app does, one PRD per feature. 0001 to 0004 are built; 0005 is planned.
+- [spec/prds/](spec/prds/): what the app does, one PRD per feature. 0001 to 0005 are built.
 - [spec/adrs/](spec/adrs/): the decisions so far. "proposed" ones wait for Frederik's review.
 - [spec/experiment-prds/](spec/experiment-prds/): ideas for later, not built.
 

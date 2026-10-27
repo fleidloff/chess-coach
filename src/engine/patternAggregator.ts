@@ -159,6 +159,7 @@ function goodMoves(game: ParsedGame, moves: MoveEval[]): FeedbackNode[] {
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_ITEMS)
     .map(p => p.node)
+    .sort((a, b) => a.ply - b.ply)
 }
 
 /** The most frequent tag across all games. A tag in the shown game wins a tie. */
@@ -179,6 +180,7 @@ export function buildReport(game: ParsedGame, evals: GameEvals, moves: MoveEval[
     topErrors: errors
       .sort((a, b) => Number(isBlunder(b)) - Number(isBlunder(a)) || b.cpl - a.cpl)
       .slice(0, MAX_ITEMS)
+      .sort((a, b) => a.ply - b.ply)
       .map(m => errorNode(m, game.moves, freq)),
     goodMoves: goodMoves(game, moves),
     actionableDrills: top ? RULES[top] : errors.length ? [GENERIC_RULE] : [],

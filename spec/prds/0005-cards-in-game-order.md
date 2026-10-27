@@ -1,6 +1,6 @@
 # PRD 0005: Good moves and top errors in game order
 
-- Status: planned
+- Status: built (2026-10-27), checked in the browser with Chess.com user `erik`
 - Date: 2026-10-27
 - Owner: Frederik
 - Related: [PRD 0001](0001-chess-coach.md) goal 4
