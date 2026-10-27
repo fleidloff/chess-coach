@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ParsedGame } from '../types/chess.ts'
-import { evictable, isStoredEvals, isStoredGames, ownerKey, toStoredEvals, usableEvals } from './storeRecords.ts'
+import { attemptKey, evictable, isStoredAttempt, isStoredEvals, isStoredGames, nextAttempt, ownerKey, toStoredEvals, usableEvals } from './storeRecords.ts'
 
 const game: ParsedGame = {
   id: 'g1',
@@ -48,4 +48,14 @@ test('evicts the owner’s oldest games only', () => {
   ]
   assert.deepEqual(evictable(records, 'lichess:fred', 2), ['a'])
   assert.deepEqual(evictable(records, 'lichess:fred', 5), [])
+})
+
+test('counts training attempts per position', () => {
+  const key = attemptKey('lichess', 'g1', 20)
+  assert.equal(key, 'lichess:g1:20')
+  const first = nextAttempt(key, undefined, false, 1)
+  const second = nextAttempt(key, first, true, 2)
+  assert.deepEqual([second.tries, second.solved, second.lastResult], [2, 1, 'solved'])
+  assert.ok(isStoredAttempt(JSON.parse(JSON.stringify(second))))
+  assert.equal(isStoredAttempt({ ...second, solved: 3 }), false)
 })

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Crown, Trash2 } from 'lucide-react'
-import type { GameEvals, ParsedGame, Platform } from './types/chess.ts'
+import type { GameEvals, ParsedGame, Platform, TacticalTag } from './types/chess.ts'
 import { analyseGame, EnginePool } from './engine/stockfishWorker.ts'
 import { aggregate, DEEP_DEPTH, QUICK_DEPTH } from './engine/patternAggregator.ts'
 import { fetchLichessGames } from './services/lichessApi.ts'
@@ -11,6 +11,8 @@ import { type BoardState, BoardView } from './components/BoardView.tsx'
 import { FeedbackPanel } from './components/FeedbackPanel.tsx'
 import { GameSelector } from './components/GameSelector.tsx'
 import { UsernameInput } from './components/UsernameInput.tsx'
+import { Trainer } from './components/Trainer.tsx'
+import { trainingPositions, type TrainingPosition } from './engine/trainer.ts'
 
 const GAME_COUNT = 10
 const STORAGE_KEY = 'chess-coach:v1'
@@ -60,12 +62,23 @@ export default function App() {
   const [storedAt, setStoredAt] = useState<number>()
   const [fromStorage, setFromStorage] = useState(0)
   const [notice, setNotice] = useState<string>()
+  const [training, setTraining] = useState<{ tag: TacticalTag; positions: TrainingPosition[] }>()
   const session = useRef<Session>(undefined)
   const abort = useRef<AbortController>(undefined)
 
   const batch = useMemo(() => aggregate(games, evals), [games, evals])
   const game = games.find(g => g.id === selectedId)
   const report = selectedId ? batch.reports.get(selectedId) : undefined
+  const trainLists = useMemo(
+    () =>
+      new Map(
+        (Object.keys(batch.tagFrequencies) as TacticalTag[])
+          .filter(t => batch.tagFrequencies[t] > 0)
+          .map(t => [t, trainingPositions(games, batch.errorsByGame, t)]),
+      ),
+    [games, batch],
+  )
+  const trainCounts = useMemo(() => new Map([...trainLists].map(([t, list]) => [t, list.length])), [trainLists])
   const deepening = Boolean(selectedId && deepIds.has(selectedId) && (evals.get(selectedId)?.depth ?? 0) < DEEP_DEPTH)
 
   function run(current: Session, g: ParsedGame, deep: boolean) {
@@ -91,6 +104,7 @@ export default function App() {
   }
 
   function show(list: ParsedGame[], cached: Map<string, GameEvals>) {
+    setTraining(undefined)
     setGames(list)
     setEvals(cached)
     setDeepIds(new Set())
@@ -152,6 +166,7 @@ export default function App() {
 
   function select(id: string) {
     const g = games.find(x => x.id === id)!
+    setTraining(undefined)
     setSelectedId(id)
     setBoard({ ply: g.moves.length })
     if (session.current && !deepIds.has(id) && (evals.get(id)?.depth ?? 0) < DEEP_DEPTH) {
@@ -254,34 +269,42 @@ export default function App() {
       </header>
 
       <main className="flex flex-1 flex-col md:grid md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
-        <div className="p-4 md:overflow-y-auto">
-          <BoardView game={game} report={report} state={board} onChange={setBoard} />
-        </div>
-        <aside
-          aria-label="Analysis"
-          className="border-t border-stone-200 p-4 md:overflow-y-auto md:border-t-0 md:border-l dark:border-stone-800"
-        >
-          {games.length ? (
-            <FeedbackPanel
-              report={report}
-              tagFrequencies={batch.tagFrequencies}
-              analysedGames={scanned}
-              totalGames={games.length}
-              errorCount={batch.errorCount}
-              untaggedCount={batch.untaggedCount}
-              deepening={deepening}
-              selected={board.node}
-              onSelect={node => setBoard({ ply: node.ply, node })}
-            />
-          ) : (
-            <div className="flex flex-col gap-3 text-sm text-stone-600 dark:text-stone-400">
-              <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Find your recurring mistakes</h2>
-              <p>Enter your Lichess or Chess.com username. The coach loads your last 10 games and runs Stockfish in this browser tab.</p>
-              <p>It shows the biggest errors and the best moves of your latest game, and the patterns that repeat across all 10 games.</p>
-              <p>No account, no server. Your games and analyses stay in this browser. A return visit shows them at once.</p>
+        {training ? (
+          <Trainer tag={training.tag} positions={training.positions} onExit={() => setTraining(undefined)} />
+        ) : (
+          <>
+            <div className="p-4 md:overflow-y-auto">
+              <BoardView game={game} report={report} state={board} onChange={setBoard} />
             </div>
-          )}
-        </aside>
+            <aside
+              aria-label="Analysis"
+              className="border-t border-stone-200 p-4 md:overflow-y-auto md:border-t-0 md:border-l dark:border-stone-800"
+            >
+              {games.length ? (
+                <FeedbackPanel
+                  report={report}
+                  tagFrequencies={batch.tagFrequencies}
+                  analysedGames={scanned}
+                  totalGames={games.length}
+                  errorCount={batch.errorCount}
+                  untaggedCount={batch.untaggedCount}
+                  deepening={deepening}
+                  selected={board.node}
+                  onSelect={node => setBoard({ ply: node.ply, node })}
+                  trainCounts={trainCounts}
+                  onTrain={tag => setTraining({ tag, positions: trainLists.get(tag) ?? [] })}
+                />
+              ) : (
+                <div className="flex flex-col gap-3 text-sm text-stone-600 dark:text-stone-400">
+                  <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Find your recurring mistakes</h2>
+                  <p>Enter your Lichess or Chess.com username. The coach loads your last 10 games and runs Stockfish in this browser tab.</p>
+                  <p>It shows the biggest errors and the best moves of your latest game, and the patterns that repeat across all 10 games.</p>
+                  <p>No account, no server. Your games and analyses stay in this browser. A return visit shows them at once.</p>
+                </div>
+              )}
+            </aside>
+          </>
+        )}
       </main>
     </div>
   )

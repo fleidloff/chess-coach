@@ -19,7 +19,8 @@ server and no LLM. The product spec is [PRD 0001](../prds/0001-chess-coach.md).
 | `src/engine/openingDb.ts` | Table of opening traps, matched on the full move order |
 | `src/engine/templateEngine.ts` | All analysis text: tag labels, summaries, rules, number formats |
 | `src/engine/patternAggregator.ts` | `MoveEval`s per game, tag counts across games, `GameReport` per game |
-| `src/components/*` | `UsernameInput`, `GameSelector`, `BoardView`, `FeedbackPanel` |
+| `src/engine/trainer.ts` | Picks the training positions for a tag and judges a move against the best move (pure, tested in Node) |
+| `src/components/*` | `UsernameInput`, `GameSelector`, `BoardView`, `FeedbackPanel`, `Trainer` |
 | `src/App.tsx` | State and orchestration |
 
 ## Data flow
@@ -122,6 +123,28 @@ The three with the highest score are shown.
 `topTag()` picks the tag with the highest game count; a tag that is in the shown game wins a tie. The report shows the
 two rules for that tag from `RULES`. With errors but no tag: one generic blunder-check rule. No errors: no rules.
 
+## Trainer
+
+[PRD 0004](../prds/0004-train-your-own-blunders.md). Below the rules, "Train this pattern (N positions)" opens the
+trainer for the report's `focusTag` (the tag the rules address). Each pattern pill is a button too: it opens the
+trainer for its own tag. `App` builds the position list for every tag that appears.
+
+- Positions: the user's errors with that tag from all analysed games (`errorsByGame`), newest game first, in move
+  order, at most 10. Each shows the position before the error, from the user's side, without arrows.
+- Input: drag and drop; tap a piece, then a target (dots mark the legal squares); or the keyboard: the board is one
+  focus stop (`role="application"`), arrow keys move a cursor, Enter picks and drops, Escape cancels. A screen reader
+  hears the cursor square and the piece on it. The cursor shows only after keyboard focus, not after a mouse click.
+- Judging: the trainer's own `EnginePool` searches the position after the user's move and after the best move, both at
+  depth 12, and `judge()` compares them. A loss of 30 cp or less is correct, so a second good move also counts. The
+  pool starts on the first move and stops when the trainer closes.
+- After a wrong move: "Try again" or "Show solution" (green arrow). After a correct move or the solution: "Show line"
+  plays the best line, then "Next". The first result per position counts; a solution before any move counts as not
+  solved.
+- The summary: "Solved X of N on the first try." with "Train again" and "Back to the report".
+- Each first result is stored per position (`attempts` store). The trainer shows "Before: 3 tries, 1 solved" from what
+  storage held when the round started.
+- Selecting another game, a new analysis or "Delete stored data" closes the trainer.
+
 ## UI
 
 - Header: username, platform, analyze/stop, progress bar ("Analyzing game 4/10"), game selector.
@@ -139,12 +162,13 @@ two rules for that tag from `RULES`. With errors but no tag: one generic blunder
 [ADR 0006](../adrs/0006-store-analyses-in-indexeddb.md), [PRD 0002](../prds/0002-analysis-cache.md).
 
 - `localStorage` key `chess-coach:v1`: `{ username, platform }` of the last run.
-- IndexedDB `chess-coach-analysis`, version 1:
+- IndexedDB `chess-coach-analysis`, version 2 (version 2 added `attempts`):
 
 | Store | Key | Value |
 | --- | --- | --- |
 | `games` | `platform:username` (lower case) | `{ schema: 1, key, games: ParsedGame[], fetchedAt }` |
 | `evals` | `platform:gameId` | `{ schema: 1, key, owner, date, engine, depth, positions, savedAt }` |
+| `attempts` | `platform:gameId:ply` | `{ schema: 1, key, tries, solved, lastResult, lastAt }` |
 
 - On start, when the saved user has a stored game list, `App` shows it with its stored evaluations, then fetches.
 - A stored evaluation is reused when `engine` equals `ENGINE_ID` and its depth is enough: depth 14 for the shown game,

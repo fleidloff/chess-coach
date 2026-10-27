@@ -118,6 +118,8 @@ export interface GameReport {
   topErrors: FeedbackNode[]
   goodMoves: FeedbackNode[]
   actionableDrills: string[]
+  /** The tag the rules address: the most frequent one across the games. */
+  focusTag?: TacticalTag
 }
 
 export interface BatchAnalysisResult {
@@ -126,6 +128,8 @@ export interface BatchAnalysisResult {
   /** User errors in all analysed games, and how many of them have no tag. */
   errorCount: number
   untaggedCount: number
+  /** The user's errors per analysed game, in game order. */
+  errorsByGame: Map<string, MoveEval[]>
   analysedGames: number
   /** gameId to report. */
   reports: Map<string, GameReport>

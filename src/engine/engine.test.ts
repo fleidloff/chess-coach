@@ -7,6 +7,7 @@ import { OPENING_TRAPS } from './openingDb.ts'
 import { aggregate, toCp } from './patternAggregator.ts'
 import { parseInfo, terminalScore } from './uci.ts'
 import { RULES } from './templateEngine.ts'
+import { judge, trainingPositions } from './trainer.ts'
 
 test('every opening trap is legal, and its refutation too', () => {
   for (const trap of OPENING_TRAPS) {
@@ -145,4 +146,18 @@ test('a pawn that the best line wins counts as a missed capture', () => {
     replyLine: ['e4e5', 'f6e4', 'e5d6', 'e4d6', 'd1d4'],
   })
   assert.deepEqual(result, { tag: 'MISSED_CAPTURE', squares: ['e4'], via: 'best', material: 1 })
+})
+
+test('picks training positions and judges a move against the best move', () => {
+  const black = game('black')
+  const { errorsByGame } = aggregate([black], new Map([['black', evals]]))
+  const positions = trainingPositions([black], errorsByGame, 'OPENING_TRAP')
+  assert.deepEqual(
+    positions.map(p => [p.ply, p.playedNotation, p.bestMoveSan, p.userColor]),
+    [[5, '3... Nf6??', 'g6', 'black']],
+  )
+  assert.deepEqual(trainingPositions([black], errorsByGame, 'MISSED_FORK'), [])
+  assert.deepEqual(judge('black', { cp: -40 }, { cp: -60 }), { correct: true, cp: 60, loss: 0 })
+  assert.deepEqual(judge('black', { cp: -40 }, { cp: -10 }), { correct: true, cp: 10, loss: 30 })
+  assert.deepEqual(judge('white', { cp: 200 }, { mate: -2 }), { correct: false, cp: -1000, loss: 1200 })
 })

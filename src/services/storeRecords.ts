@@ -95,3 +95,40 @@ export function evictable(records: Pick<StoredEvals, 'key' | 'owner' | 'date'>[]
     .slice(keep)
     .map(r => r.key)
 }
+
+export interface StoredAttempt {
+  schema: typeof SCHEMA
+  /** `platform:gameId:ply` of the trained position. */
+  key: string
+  tries: number
+  /** Tries that were solved with the first move. */
+  solved: number
+  lastResult: 'solved' | 'failed'
+  lastAt: number
+}
+
+export const attemptKey = (platform: Platform, gameId: string, ply: number) => `${platform}:${gameId}:${ply}`
+
+export function isStoredAttempt(x: unknown): x is StoredAttempt {
+  return (
+    isObject(x) &&
+    x.schema === SCHEMA &&
+    typeof x.key === 'string' &&
+    isNumber(x.tries) &&
+    isNumber(x.solved) &&
+    x.solved <= x.tries &&
+    (x.lastResult === 'solved' || x.lastResult === 'failed') &&
+    isNumber(x.lastAt)
+  )
+}
+
+export function nextAttempt(key: string, prev: StoredAttempt | undefined, solved: boolean, now: number): StoredAttempt {
+  return {
+    schema: SCHEMA,
+    key,
+    tries: (prev?.tries ?? 0) + 1,
+    solved: (prev?.solved ?? 0) + (solved ? 1 : 0),
+    lastResult: solved ? 'solved' : 'failed',
+    lastAt: now,
+  }
+}

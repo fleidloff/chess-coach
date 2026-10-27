@@ -19,6 +19,8 @@ header removes everything.
 3. Click an error or a good move. The board shows the position, your move (red) and the best move (green).
 4. Press "Best line" or "Your move and the reply" to play the engine line. Use ← and → to step.
 5. Pick another game in the "Game" list. A deeper analysis of that game starts.
+6. Press "Train this pattern", or click a pattern pill, to train on your own positions. Drag a piece, or click a piece
+   and then one of the marked squares.
 
 ## Development
 

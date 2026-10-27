@@ -2,9 +2,12 @@ import type { GameEvals, ParsedGame, Platform } from '../types/chess.ts'
 import {
   evalsKey,
   evictable,
+  isStoredAttempt,
   isStoredEvals,
   isStoredGames,
+  nextAttempt,
   SCHEMA,
+  type StoredAttempt,
   type StoredEvals,
   type StoredGames,
   toStoredEvals,
@@ -13,9 +16,11 @@ import {
 
 // Not "chess-coach": that database belongs to the first app and can hold its puzzle progress.
 const DB_NAME = 'chess-coach-analysis'
-const DB_VERSION = 1
+// Version 2 adds the attempts store (PRD 0004).
+const DB_VERSION = 2
 const GAMES = 'games'
 const EVALS = 'evals'
+const ATTEMPTS = 'attempts'
 
 let connection: Promise<IDBDatabase> | undefined
 
@@ -30,8 +35,9 @@ function open(): Promise<IDBDatabase> {
   connection ??= new Promise<IDBDatabase>((resolve, reject) => {
     const r = indexedDB.open(DB_NAME, DB_VERSION)
     r.onupgradeneeded = () => {
-      r.result.createObjectStore(GAMES, { keyPath: 'key' })
-      r.result.createObjectStore(EVALS, { keyPath: 'key' })
+      for (const name of [GAMES, EVALS, ATTEMPTS]) {
+        if (!r.result.objectStoreNames.contains(name)) r.result.createObjectStore(name, { keyPath: 'key' })
+      }
     }
     r.onsuccess = () => {
       const db = r.result
@@ -95,6 +101,19 @@ export async function evictOld(owner: string): Promise<void> {
   if (!keys.length) return
   const w = await store(EVALS, 'readwrite')
   await Promise.all(keys.map(k => request(w.delete(k))))
+}
+
+/** Stored training attempts by key. Skips records that fail validation. */
+export async function loadAttempts(keys: string[]): Promise<Map<string, StoredAttempt>> {
+  const s = await store(ATTEMPTS, 'readonly')
+  const records: unknown[] = await Promise.all(keys.map(k => request(s.get(k))))
+  return new Map(records.filter(isStoredAttempt).map(r => [r.key, r]))
+}
+
+export async function saveAttempt(key: string, prev: StoredAttempt | undefined, solved: boolean): Promise<StoredAttempt> {
+  const record = nextAttempt(key, prev, solved, Date.now())
+  await request((await store(ATTEMPTS, 'readwrite')).put(record))
+  return record
 }
 
 export async function deleteAll(): Promise<void> {

@@ -182,6 +182,7 @@ export function buildReport(game: ParsedGame, evals: GameEvals, moves: MoveEval[
       .map(m => errorNode(m, game.moves, freq)),
     goodMoves: goodMoves(game, moves),
     actionableDrills: top ? RULES[top] : errors.length ? [GENERIC_RULE] : [],
+    focusTag: top,
   }
 }
 
@@ -198,8 +199,10 @@ export function aggregate(games: ParsedGame[], evals: Map<string, GameEvals>): B
   for (const { moves } of analysed) {
     for (const tag of new Set(moves.flatMap(m => (m.tag ? [m.tag] : [])))) tagFrequencies[tag]++
   }
-  const errors = analysed.flatMap(a => a.moves.filter(m => m.color === a.game.userColor && isError(m)))
+  const errorsByGame = new Map(analysed.map(a => [a.game.id, a.moves.filter(m => m.color === a.game.userColor && isError(m))]))
+  const errors = [...errorsByGame.values()].flat()
   return {
+    errorsByGame,
     tagFrequencies,
     errorCount: errors.length,
     untaggedCount: errors.filter(m => !m.tag).length,

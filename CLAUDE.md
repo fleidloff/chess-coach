@@ -10,7 +10,7 @@ This is Frederik's own project. The product spec is [PRD 0001](spec/prds/0001-ch
 
 - [spec/docs/architecture.md](spec/docs/architecture.md): modules, the analysis pipeline, scores, tags, the UI.
 - [spec/docs/coding-guidelines.md](spec/docs/coding-guidelines.md): project rules. They override general habits.
-- [spec/prds/](spec/prds/): what the app does, one PRD per feature. 0001 to 0003 are built; 0004 is planned.
+- [spec/prds/](spec/prds/): what the app does, one PRD per feature. 0001 to 0004 are built; 0005 is planned.
 - [spec/adrs/](spec/adrs/): the decisions so far. "proposed" ones wait for Frederik's review.
 - [spec/experiment-prds/](spec/experiment-prds/): ideas for later, not built.
 
@@ -20,8 +20,8 @@ This is Frederik's own project. The product spec is [PRD 0001](spec/prds/0001-ch
 - `src/services/`: `lichessApi.ts`, `chessComApi.ts` fetch and normalize games to `ParsedGame`. `analysisStore.ts`
   (IndexedDB) and `storeRecords.ts` (pure record rules) keep games and evaluations between visits.
 - `src/engine/`: `stockfishWorker.ts` (the only file that touches `Worker`), `uci.ts`, `heuristics.ts`,
-  `openingDb.ts`, `templateEngine.ts` (all user-facing analysis text), `patternAggregator.ts`.
-- `src/components/`: `UsernameInput`, `GameSelector`, `BoardView`, `FeedbackPanel`.
+  `openingDb.ts`, `templateEngine.ts` (all user-facing analysis text), `patternAggregator.ts`, `trainer.ts`.
+- `src/components/`: `UsernameInput`, `GameSelector`, `BoardView`, `FeedbackPanel`, `Trainer`.
 - `src/App.tsx`: state and orchestration.
 - `public/engine/`: Stockfish files, copied from `node_modules/stockfish` by `npm run engine`. Git-ignored.
 - `spec/`: `docs/`, `prds/`, `adrs/`, `experiment-prds/`.
@@ -49,7 +49,8 @@ The preview server for Claude is `chess-coach` in `.claude/launch.json`. Public 
 - A new tag, trap or heuristic gets a FEN test in `src/engine/engine.test.ts`.
 - `localStorage` keys carry a version (`chess-coach:v1`). Read them in `try/catch` and validate the shape.
 - IndexedDB `chess-coach-analysis`: every record has `schema`; validate on read. Never touch the first app's
-  `chess-coach` database. Bump `ENGINE_ID` when the engine changes.
+  `chess-coach` database. Bump `ENGINE_ID` when the engine changes. A new store needs a new `DB_VERSION` and an
+  upgrade that keeps the existing stores.
 - Commits: short imperative sentence ("Add pin detection"). Branch from `main`. `main` deploys to GitHub Pages.
 - When Frederik is away and a decision is unclear: take it and write an ADR with status "proposed".
 

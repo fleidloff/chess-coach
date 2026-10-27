@@ -1,12 +1,13 @@
 # PRD 0004: Train the top pattern on your own positions
 
-- Status: planned
+- Status: built (2026-10-27), checked in the browser with Chess.com user `erik` (mouse, tap, keyboard, phone width)
 - Date: 2026-10-27
 - Owner: Frederik
 - Related: [PRD 0001](0001-chess-coach.md) (rules), [PRD 0002](0002-analysis-cache.md) (storage), the puzzle mode of the
   first app (commit `ac2bf49`, `src/components/Puzzles.tsx`, with tap-to-move)
-- Touches: `src/App.tsx`, `src/components/BoardView.tsx`, a new `src/components/Trainer.tsx`,
-  `src/engine/patternAggregator.ts`, `spec/docs/architecture.md`
+- Touches: `src/App.tsx`, `src/components/FeedbackPanel.tsx`, new `src/components/Trainer.tsx` and
+  `src/engine/trainer.ts`, `src/engine/patternAggregator.ts`, `src/services/analysisStore.ts` (database version 2),
+  `src/services/storeRecords.ts`, `spec/docs/architecture.md`
 
 ## Problem
 
@@ -57,9 +58,15 @@ training material for that player, and the app has them already.
 - Positions from other players or a puzzle database.
 - Spaced repetition over days (needs PRD 0002 and its own PRD).
 
-## Open questions
+## Decisions on the open questions
 
-- Accept any move within 30 cp of the best move, or only the best move? (Suggestion: within 30 cp. Two good moves
-  should both count.)
-- Train only the top tag, or let the user pick any tag from the pattern pills? (Suggestion: top tag first; a click on a
-  pill can start training for that tag later.)
+- A move within 30 cp of the best move counts. Both positions are searched at depth 12, so the depth is the same.
+- The button under the rules trains the top tag. A click on a pattern pill trains that pill's tag (Frederik,
+  2026-10-27).
+
+## Notes from the build
+
+- The trainer does not reuse `BoardView`: its move list would show the answer. It has its own board and line player.
+- "Before: N tries" shows the stored count from the start of the round, not the try the user just made.
+- The wrong-move message also gives the best move's eval: "Not quite. Your move gives +2.3. The best move keeps +6.7."
+

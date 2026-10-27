@@ -18,6 +18,9 @@ engine id, depth and game date. A run uses a stored evaluation when the engine i
 keep the newest 50 games per user. `analysisStore.ts` does all IndexedDB access; the pure record logic sits in
 `storeRecords.ts` and has Node tests.
 
+Later: [PRD 0004](../prds/0004-train-your-own-blunders.md) adds a third store, `attempts`, in database version 2. The
+upgrade creates only the stores that are missing.
+
 ## Options considered
 
 - **IndexedDB, own database, validated records (chosen):** room for 50 games per user; a schema field makes later

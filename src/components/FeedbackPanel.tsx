@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Lightbulb, Loader2, Repeat, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Dumbbell, Lightbulb, Loader2, Repeat, XCircle } from 'lucide-react'
 import type { FeedbackNode, GameReport, TacticalTag } from '../types/chess.ts'
 import { DEEP_DEPTH } from '../engine/patternAggregator.ts'
 import { formatCp, KIND_LABEL, TAG_LABEL } from '../engine/templateEngine.ts'
@@ -13,6 +13,9 @@ interface Props {
   deepening: boolean
   selected?: FeedbackNode
   onSelect: (node: FeedbackNode) => void
+  /** Training positions per tag. */
+  trainCounts: Map<TacticalTag, number>
+  onTrain: (tag: TacticalTag) => void
 }
 
 const heading = 'mb-2 flex items-center gap-2 text-sm font-semibold tracking-wide text-stone-600 uppercase dark:text-stone-400'
@@ -62,7 +65,10 @@ export function FeedbackPanel({
   deepening,
   selected,
   onSelect,
+  trainCounts,
+  onTrain,
 }: Props) {
+  const trainCount = report?.focusTag ? (trainCounts.get(report.focusTag) ?? 0) : 0
   const tags = (Object.keys(tagFrequencies) as TacticalTag[]).filter(t => tagFrequencies[t] > 0).sort((a, b) => tagFrequencies[b] - tagFrequencies[a])
   const scanning = analysedGames < totalGames
 
@@ -121,6 +127,14 @@ export function FeedbackPanel({
                   <li key={d}>{d}</li>
                 ))}
               </ul>
+              {report.focusTag && trainCount > 0 && (
+                <button
+                  onClick={() => report.focusTag && onTrain(report.focusTag)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:outline-none dark:focus-visible:ring-offset-stone-950"
+                >
+                  <Dumbbell className="size-4" aria-hidden /> Train this pattern ({trainCount} {trainCount === 1 ? 'position' : 'positions'})
+                </button>
+              )}
             </section>
           )}
         </>
@@ -132,19 +146,28 @@ export function FeedbackPanel({
         </h2>
         {tags.length > 0 && (
           <ul className="flex flex-wrap gap-1.5">
-            {tags.map(t => (
-              <li
-                key={t}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                  tagFrequencies[t] >= 2
-                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
-                    : 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300'
-                }`}
-              >
-                {tagFrequencies[t] >= 2 && <AlertTriangle className="size-3" aria-hidden />}
-                {TAG_LABEL[t]}: {tagFrequencies[t]}/{totalGames} games
-              </li>
-            ))}
+            {tags.map(t => {
+              const count = trainCounts.get(t) ?? 0
+              return (
+                <li key={t}>
+                  <button
+                    onClick={() => onTrain(t)}
+                    disabled={!count}
+                    title={count ? `Train ${count} ${count === 1 ? 'position' : 'positions'}` : undefined}
+                    aria-label={`${TAG_LABEL[t]}: ${tagFrequencies[t]} of ${totalGames} games. Train ${count} ${count === 1 ? 'position' : 'positions'}.`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none enabled:cursor-pointer disabled:opacity-60 ${
+                      tagFrequencies[t] >= 2
+                        ? 'bg-amber-100 text-amber-900 enabled:hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:enabled:hover:bg-amber-900'
+                        : 'bg-stone-200 text-stone-700 enabled:hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300 dark:enabled:hover:bg-stone-700'
+                    }`}
+                  >
+                    {tagFrequencies[t] >= 2 && <AlertTriangle className="size-3" aria-hidden />}
+                    {TAG_LABEL[t]}: {tagFrequencies[t]}/{totalGames} games
+                    {count > 0 && <Dumbbell className="size-3" aria-hidden />}
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         )}
         {untaggedCount > 0 && (
@@ -156,7 +179,7 @@ export function FeedbackPanel({
           {scanning
             ? `Scanned ${analysedGames}/${totalGames} games. The counts grow while the scan runs.`
             : tags.length
-              ? 'Counts the games in which each pattern appears at least once.'
+              ? 'Counts the games in which each pattern appears at least once. Click a pattern to train it.'
               : errorCount
                 ? 'No recurring tactical pattern found.'
                 : 'No blunder in these games. Well played.'}
