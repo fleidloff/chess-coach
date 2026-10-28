@@ -162,6 +162,21 @@ export function lineGain(fen: string, line: string[], max = 8): { gain: number; 
   return { gain: settled, square }
 }
 
+/** The first check `side` gives within its first 3 moves of a line, while the checked king can still castle. */
+function centerCheck(fen: string, line: string[], side: ChessColor): Move | undefined {
+  const chess = new Chess(fen)
+  for (const uci of line.slice(0, 6)) {
+    const rights = chess.getCastlingRights(enemyOf(side))
+    let m: Move
+    try {
+      m = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] })
+    } catch {
+      return
+    }
+    if (m.color === side && chess.inCheck()) return rights.k || rights.q ? m : undefined
+  }
+}
+
 const pressure = (chess: Chess, sq: Square, color: ChessColor) =>
   chess.attackers(sq, enemyOf(color)).length - chess.attackers(sq, color).length
 
@@ -269,6 +284,14 @@ export function tagBlunder(ctx: BlunderContext): TagResult | undefined {
   if (missed.gain >= 1 && !move.captured) {
     return { tag: 'MISSED_CAPTURE', squares: missed.square ? [missed.square] : [], via: 'best', material: missed.gain }
   }
+  if (lost.gain >= 1 && !move.captured) {
+    return { tag: 'HANGING_PIECE', squares: lost.square ? [lost.square] : [], via: 'reply', material: lost.gain }
+  }
+
+  const allowed = centerCheck(fenAfter, ctx.replyLine ?? [], enemyOf(me))
+  if (allowed) return { tag: 'KING_IN_CENTER', squares: [allowed.to, kingSquare(after, me)], via: 'reply' }
+  const missedCheck = centerCheck(ctx.fenBefore, ctx.bestLine ?? [], me)
+  if (missedCheck) return { tag: 'KING_IN_CENTER', squares: [missedCheck.to, kingSquare(before, enemyOf(me))], via: 'best' }
 }
 
 export interface MoveFeatures {

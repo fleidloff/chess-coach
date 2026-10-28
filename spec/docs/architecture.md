@@ -32,6 +32,7 @@ UsernameInput ─► loadGames() + loadEvals() ─► stored report at once
                     EnginePool ◄─────┘ analyseGame() for the rest: one job per position
                          │              game 1: depth 14, MultiPV 2, priority 0
                          │              games 2–10: depth 10, MultiPV 1, priority 1
+                         │              then games 2–10 one by one: depth 14, MultiPV 2, priority 2
                          ▼
                Map<gameId, GameEvals>  (React state, grows as games finish; each result goes to saveEvals())
                          │
@@ -43,8 +44,11 @@ UsernameInput ─► loadGames() + loadEvals() ─► stored report at once
               FeedbackPanel ─► click ─► BoardState ─► BoardView
 ```
 
-When the user selects a game that only had the quick scan, `App` queues a deep analysis of it with priority 0. The
-deep result replaces the quick one; a result never replaces a deeper one.
+After the quick scan, `deepenRest()` gives games 2 to 10 the deep analysis, one game at a time, newest first, at
+priority 2 ([PRD 0007](../prds/0007-fewer-untagged-errors.md), [ADR 0008](../adrs/0008-deep-analysis-for-all-games.md)).
+The header shows "Deepening game N/10". When the user selects a game that has no deep analysis yet, `App` queues it
+with priority 0. `Session.deep` holds the games with a deep analysis stored, running or queued, so no game runs twice.
+The deep result replaces the quick one; a result never replaces a deeper one.
 
 ## Engine pool
 
@@ -93,15 +97,19 @@ missed, or the reply the user allowed.
 | 12 | `HANGING_PIECE` | The reply line wins 2+ points of material for the opponent (`lineGain()`) |
 | 13 | `MISSED_CAPTURE` | The best line wins 2+ points of material for the mover, and the played move takes nothing |
 | 14 | `MISSED_CAPTURE` | The best line wins a pawn for the mover, and the played move takes nothing. The error itself guarantees the swing of 150 cp; the text says "wins a pawn" |
+| 15 | `HANGING_PIECE` | The reply line wins a pawn for the opponent, and the played move takes nothing. The text says "Loses a pawn to Qxb7." |
+| 16 | `KING_IN_CENTER` | Allowed: the opponent checks the mover's king within its first 3 moves of the reply line, while that king can still castle. Missed: the same for the mover's best line and the opponent's king |
 
 `lineGain()` plays up to 8 plies of an engine line and counts the material at the last quiet move, so a capture whose
-recapture is still to come does not count. Rules 12 to 14 catch what the static checks miss: defenders behind
+recapture is still to come does not count. Rules 12 to 15 catch what the static checks miss: defenders behind
 another piece (x-ray), and wins that start with a quiet move.
 
 An error that matches no rule stays untagged and reads "Tactical error. Best was …". The pattern section shows how
 many errors are untagged ("Other errors: 7 of 22 blunders have no known pattern."). In the measurement
-([PRD 0003](../prds/0003-more-tactical-tags.md)), 9 of 39 errors stayed untagged (23 %); they change material by less than
-a pawn.
+([PRD 0007](../prds/0007-fewer-untagged-errors.md)) of 50 `fredbbs` games at depth 14, 32 of 224 errors stay
+untagged (14 %): endgames, decided positions, pawn breaks, piece placement.
+
+A move that stalemates reads "Stalemates the opponent. Best was …", whatever its tag.
 
 Opening traps match the whole move order, without the "ply ≤ 10" limit of the spec: the Englund trap 6. Bc3 is ply 11.
 
@@ -132,6 +140,12 @@ trainer for its own tag. `App` builds the position list for every tag that appea
 
 - Positions: the user's errors with that tag from all analysed games (`errorsByGame`), newest game first, in move
   order, at most 10. Each shows the position before the error, from the user's side, without arrows.
+- The opponent's move ([PRD 0006](../prds/0006-show-the-opponent-move.md)): `trainingPositions()` replays the game to
+  find the move before the error (`lastMove`). The board opens one move earlier and plays it after 600 ms (at once
+  with reduced motion); input waits until then. The panel says "Black played 23... Qxd4." The from-square and the
+  to-square of the last move on the board are lime green: the opponent's move, then the user's move, then the last
+  move of "Show line". "Try again" and "Show solution" show the opponent's move again, with no replay. An error on
+  ply 0 has no opponent's move.
 - Input: drag and drop; tap a piece, then a target (dots mark the legal squares); or the keyboard: the board is one
   focus stop (`role="application"`), arrow keys move a cursor, Enter picks and drops, Escape cancels. A screen reader
   hears the cursor square and the piece on it. The cursor shows only after keyboard focus, not after a mouse click.

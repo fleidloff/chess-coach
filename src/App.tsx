@@ -43,6 +43,8 @@ interface Session {
   pool: EnginePool
   platform: Platform
   owner: string
+  /** Games with a deep analysis stored, running or queued. */
+  deep: Set<string>
 }
 
 const STORAGE_FAILED = 'This browser does not keep the analysis. It runs again on the next visit.'
@@ -81,8 +83,9 @@ export default function App() {
   const trainCounts = useMemo(() => new Map([...trainLists].map(([t, list]) => [t, list.length])), [trainLists])
   const deepening = Boolean(selectedId && deepIds.has(selectedId) && (evals.get(selectedId)?.depth ?? 0) < DEEP_DEPTH)
 
-  function run(current: Session, g: ParsedGame, deep: boolean) {
-    analyseGame(current.pool, g, deep ? DEEP_DEPTH : QUICK_DEPTH, deep ? 2 : 1, deep ? 0 : 1).then(
+  function run(current: Session, g: ParsedGame, deep: boolean, priority = deep ? 0 : 1) {
+    if (deep) current.deep.add(g.id)
+    return analyseGame(current.pool, g, deep ? DEEP_DEPTH : QUICK_DEPTH, deep ? 2 : 1, priority).then(
       result => {
         setEvals(prev => {
           if ((prev.get(g.id)?.depth ?? 0) >= result.depth) return prev
@@ -94,6 +97,16 @@ export default function App() {
         if (session.current === current && e.message !== 'Analysis stopped.') setError(e.message)
       },
     )
+  }
+
+  /** Deepens the other games one at a time, newest first, behind the quick scan (PRD 0007). */
+  async function deepenRest(current: Session, rest: ParsedGame[]) {
+    for (const g of rest) {
+      if (session.current !== current) return
+      if (current.deep.has(g.id)) continue
+      setDeepIds(prev => new Set(prev).add(g.id))
+      await run(current, g, true, 2)
+    }
   }
 
   function stop() {
@@ -148,7 +161,8 @@ export default function App() {
     }
     const cached = await loadEvals(platform, fetched).catch(() => new Map<string, GameEvals>())
     if (controller.signal.aborted) return
-    const current: Session = { pool: new EnginePool(), platform, owner }
+    const stillDeep = fetched.filter(g => (cached.get(g.id)?.depth ?? 0) >= DEEP_DEPTH).map(g => g.id)
+    const current: Session = { pool: new EnginePool(), platform, owner, deep: new Set(stillDeep) }
     session.current = current
     if (stored && sameGames(stored.games, fetched)) setGames(fetched)
     else show(fetched, cached)
@@ -160,8 +174,9 @@ export default function App() {
       .then(() => evictOld(owner))
       .catch(() => setNotice(STORAGE_FAILED))
     fetched.forEach((g, i) => {
-      if ((cached.get(g.id)?.depth ?? 0) < (i === 0 ? DEEP_DEPTH : QUICK_DEPTH)) run(current, g, i === 0)
+      if ((cached.get(g.id)?.depth ?? 0) < (i === 0 ? DEEP_DEPTH : QUICK_DEPTH)) void run(current, g, i === 0)
     })
+    void deepenRest(current, fetched.slice(1))
   }
 
   function select(id: string) {
@@ -169,9 +184,9 @@ export default function App() {
     setTraining(undefined)
     setSelectedId(id)
     setBoard({ ply: g.moves.length })
-    if (session.current && !deepIds.has(id) && (evals.get(id)?.depth ?? 0) < DEEP_DEPTH) {
-      setDeepIds(new Set(deepIds).add(id))
-      run(session.current, g, true)
+    if (session.current && !session.current.deep.has(id) && (evals.get(id)?.depth ?? 0) < DEEP_DEPTH) {
+      setDeepIds(prev => new Set(prev).add(id))
+      void run(session.current, g, true)
     }
   }
 
@@ -200,7 +215,22 @@ export default function App() {
   }, [settings])
 
   const scanned = batch.analysedGames
-  const running = status === 'fetching' || (status === 'analysing' && (scanned < games.length || deepening))
+  const deepened = games.filter(g => (evals.get(g.id)?.depth ?? 0) >= DEEP_DEPTH).length
+  const running = status === 'fetching' || (status === 'analysing' && (scanned < games.length || deepened < games.length))
+  const progress =
+    status !== 'analysing'
+      ? undefined
+      : scanned < games.length
+        ? {
+            label: 'Games analyzed',
+            done: scanned,
+            text: fromStorage
+              ? `Analyzing ${plural(games.length - fromStorage, 'new game')}, ${fromStorage} from storage…`
+              : `Analyzing game ${Math.min(scanned + 1, games.length)}/${games.length}…`,
+          }
+        : deepened < games.length
+          ? { label: 'Games deepened', done: deepened, text: `Deepening game ${deepened + 1}/${games.length}…` }
+          : undefined
 
   return (
     <div className="flex min-h-dvh flex-col md:h-dvh md:overflow-hidden">
@@ -234,22 +264,18 @@ export default function App() {
             {status === 'fetching' && (storedAt ? 'Checking for new games…' : 'Loading games…')}
           </p>
         )}
-        {status === 'analysing' && scanned < games.length && (
+        {progress && (
           <div className="flex items-center gap-3 text-sm">
-            <span className="shrink-0 text-stone-600 dark:text-stone-400">
-              {fromStorage
-                ? `Analyzing ${plural(games.length - fromStorage, 'new game')}, ${fromStorage} from storage…`
-                : `Analyzing game ${Math.min(scanned + 1, games.length)}/${games.length}…`}
-            </span>
+            <span className="shrink-0 text-stone-600 dark:text-stone-400">{progress.text}</span>
             <div
               role="progressbar"
-              aria-label="Games analyzed"
+              aria-label={progress.label}
               aria-valuemin={0}
               aria-valuemax={games.length}
-              aria-valuenow={scanned}
+              aria-valuenow={progress.done}
               className="h-1.5 flex-1 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800"
             >
-              <div className="h-full bg-sky-500 transition-[width] motion-reduce:transition-none" style={{ width: `${(scanned / games.length) * 100}%` }} />
+              <div className="h-full bg-sky-500 transition-[width] motion-reduce:transition-none" style={{ width: `${(progress.done / games.length) * 100}%` }} />
             </div>
           </div>
         )}

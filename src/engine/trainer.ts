@@ -1,3 +1,4 @@
+import { Chess } from 'chess.js'
 import type { Color, MoveEval, ParsedGame, Platform, Score, TacticalTag } from '../types/chess.ts'
 import { toCp } from './patternAggregator.ts'
 import { moveNotation } from './templateEngine.ts'
@@ -19,6 +20,8 @@ export interface TrainingPosition {
   bestLine: string[]
   opponent: string
   date: string
+  /** The opponent's move that led to `fen`. None for an error on the first ply. */
+  lastMove?: { san: string; from: string; to: string; notation: string; fenBefore: string }
 }
 
 /** The user's errors with this tag, newest game first, in move order within a game. */
@@ -28,20 +31,31 @@ export function trainingPositions(games: ParsedGame[], errorsByGame: Map<string,
       (errorsByGame.get(g.id) ?? [])
         .filter(m => m.tag === tag && m.bestMoveSan)
         .sort((a, b) => a.ply - b.ply)
-        .map(m => ({
-          platform: g.platform,
-          gameId: g.id,
-          ply: m.ply,
-          fen: m.fenBefore,
-          userColor: g.userColor,
-          playedNotation: moveNotation(m.ply, m.san, '??'),
-          bestMoveSan: m.bestMoveSan!,
-          bestLine: m.bestLine,
-          opponent: g.userColor === 'white' ? g.blackPlayer : g.whitePlayer,
-          date: g.date,
-        })),
+        .map(m => ({ g, m })),
     )
     .slice(0, TRAIN_MAX)
+    .map(({ g, m }) => ({
+      platform: g.platform,
+      gameId: g.id,
+      ply: m.ply,
+      fen: m.fenBefore,
+      userColor: g.userColor,
+      playedNotation: moveNotation(m.ply, m.san, '??'),
+      bestMoveSan: m.bestMoveSan!,
+      bestLine: m.bestLine,
+      opponent: g.userColor === 'white' ? g.blackPlayer : g.whitePlayer,
+      date: g.date,
+      lastMove: lastMove(g.moves, m.ply),
+    }))
+}
+
+function lastMove(moves: string[], ply: number): TrainingPosition['lastMove'] {
+  if (ply === 0) return undefined
+  const chess = new Chess()
+  for (const san of moves.slice(0, ply - 1)) chess.move(san)
+  const fenBefore = chess.fen()
+  const { san, from, to } = chess.move(moves[ply - 1])
+  return { san, from, to, notation: moveNotation(ply - 1, san), fenBefore }
 }
 
 /** Compares the positions after the user's move and after the best move, both searched at the same depth. */

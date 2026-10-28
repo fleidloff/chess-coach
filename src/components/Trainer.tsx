@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
-import { Chess, type Square } from 'chess.js'
-import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, Pause, Play, RotateCcw, Undo2, XCircle } from 'lucide-react'
+import { Chess, type Move, type Square } from 'chess.js'
+import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Eye, Loader2, MoveRight, Pause, Play, RotateCcw, Undo2, XCircle } from 'lucide-react'
 import type { TacticalTag } from '../types/chess.ts'
 import { EnginePool } from '../engine/stockfishWorker.ts'
 import { playMove } from '../engine/heuristics.ts'
@@ -19,9 +19,10 @@ interface Props {
 const ARROW_BEST = 'rgba(22, 163, 74, 0.85)'
 const ARROW_LINE = 'rgba(37, 99, 235, 0.8)'
 const SELECTED = { backgroundColor: 'rgba(250, 204, 21, 0.5)' }
+const LAST_MOVE = { backgroundColor: 'rgba(155, 199, 0, 0.41)' }
 const CURSOR = { boxShadow: 'inset 0 0 0 4px rgba(14, 165, 233, 0.9)' }
-const TARGET = { background: 'radial-gradient(circle closest-side, rgba(0, 0, 0, 0.3) 32%, transparent 34%)' }
-const CAPTURE = { background: 'radial-gradient(circle closest-side, transparent 78%, rgba(0, 0, 0, 0.3) 80%)' }
+const TARGET = { backgroundImage: 'radial-gradient(circle closest-side, rgba(0, 0, 0, 0.3) 32%, transparent 34%)' }
+const CAPTURE = { backgroundImage: 'radial-gradient(circle closest-side, transparent 78%, rgba(0, 0, 0, 0.3) 80%)' }
 
 const btn =
   'inline-flex items-center justify-center gap-1.5 rounded-md border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none dark:border-stone-700 dark:hover:bg-stone-800'
@@ -30,6 +31,7 @@ const primary =
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const keyOf = (p: TrainingPosition) => attemptKey(p.platform, p.gameId, p.ply)
+const OPPONENT_DELAY = 600
 const PIECE_NAME: Record<string, string> = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }
 
 export function Trainer({ tag, positions, onExit }: Props) {
@@ -126,7 +128,7 @@ export function Trainer({ tag, positions, onExit }: Props) {
   )
 }
 
-type Phase = 'solving' | 'checking' | 'correct' | 'wrong' | 'revealed'
+type Phase = 'opponent' | 'solving' | 'checking' | 'correct' | 'wrong' | 'revealed'
 
 interface ExerciseProps {
   tag: TacticalTag
@@ -141,8 +143,9 @@ interface ExerciseProps {
 }
 
 function Exercise({ tag, position, number, total, before, evaluate, onFirstResult, onNext, onExit }: ExerciseProps) {
-  const [phase, setPhase] = useState<Phase>('solving')
-  const [fen, setFen] = useState(position.fen)
+  const [phase, setPhase] = useState<Phase>(position.lastMove ? 'opponent' : 'solving')
+  const [fen, setFen] = useState(position.lastMove && !reducedMotion() ? position.lastMove.fenBefore : position.fen)
+  const [myMove, setMyMove] = useState<Move>()
   const [message, setMessage] = useState('')
   const [selected, setSelected] = useState<Square>()
   const [cursor, setCursor] = useState<Square>(position.userColor === 'white' ? 'e2' : 'e7')
@@ -165,6 +168,19 @@ function Exercise({ tag, position, number, total, before, evaluate, onFirstResul
     }
     return fens
   }, [position])
+
+  useEffect(() => {
+    if (phase !== 'opponent') return
+    // With reduced motion the board already shows the move; the state change still lets the live region announce it.
+    const t = setTimeout(
+      () => {
+        setFen(position.fen)
+        setPhase('solving')
+      },
+      reducedMotion() ? 0 : OPPONENT_DELAY,
+    )
+    return () => clearTimeout(t)
+  }, [phase, position.fen])
 
   useEffect(() => {
     if (!line?.playing) return
@@ -193,6 +209,7 @@ function Exercise({ tag, position, number, total, before, evaluate, onFirstResul
     const mine = playMove(position.fen, `${from}${to}${promotion ?? ''}`)
     if (!mine || !best) return false
     setFen(mine.chess.fen())
+    setMyMove(mine.move)
     setPhase('checking')
     setMessage(`Checking ${mine.move.san}…`)
     const same = mine.move.san === best.move.san
@@ -257,21 +274,25 @@ function Exercise({ tag, position, number, total, before, evaluate, onFirstResul
     setMessage(`The best move is ${position.bestMoveSan}.`)
   }
 
-  const squareStyles: Record<string, React.CSSProperties> = {}
-  for (const m of targets) squareStyles[m.to] = m.captured ? CAPTURE : TARGET
-  if (selected) squareStyles[selected] = SELECTED
-  if (phase === 'solving' && focused) squareStyles[cursor] = { ...squareStyles[cursor], ...CURSOR }
-
   let shownFen = fen
   let arrows: { startSquare: string; endSquare: string; color: string }[] = []
+  let moved: { from: string; to: string } | undefined =
+    phase === 'checking' || phase === 'correct' || phase === 'wrong' ? myMove : phase === 'opponent' ? undefined : position.lastMove
   if (line) {
     shownFen = lineFens[line.index]
     const last = line.index > 0 ? playMove(lineFens[line.index - 1], position.bestLine[line.index - 1]) : undefined
     if (last) arrows = [{ startSquare: last.move.from, endSquare: last.move.to, color: ARROW_LINE }]
+    moved = last?.move ?? position.lastMove
   } else if (phase === 'revealed') {
     const best = playMove(position.fen, position.bestMoveSan)
     if (best) arrows = [{ startSquare: best.move.from, endSquare: best.move.to, color: ARROW_BEST }]
   }
+
+  const squareStyles: Record<string, React.CSSProperties> = {}
+  if (moved) squareStyles[moved.from] = squareStyles[moved.to] = LAST_MOVE
+  for (const m of targets) squareStyles[m.to] = { ...squareStyles[m.to], ...(m.captured ? CAPTURE : TARGET) }
+  if (selected) squareStyles[selected] = { ...squareStyles[selected], ...SELECTED }
+  if (phase === 'solving' && focused) squareStyles[cursor] = { ...squareStyles[cursor], ...CURSOR }
   const done = phase === 'correct' || phase === 'revealed'
 
   return (
@@ -343,7 +364,13 @@ function Exercise({ tag, position, number, total, before, evaluate, onFirstResul
           </button>
         </div>
         <div>
-          <p className="text-lg font-medium">
+          <p className="text-lg font-medium" aria-live="polite" aria-atomic="true">
+            {position.lastMove && phase !== 'opponent' && (
+              <span className="flex items-center gap-1.5 text-base font-normal">
+                <MoveRight className="size-4 shrink-0 text-lime-700 dark:text-lime-400" aria-hidden />
+                {position.userColor === 'white' ? 'Black' : 'White'} played {position.lastMove.notation}.
+              </span>
+            )}{' '}
             Find the best move for {position.userColor}. {number}/{total}
           </p>
           <p className="text-sm text-stone-600 dark:text-stone-400">

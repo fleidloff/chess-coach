@@ -1,6 +1,6 @@
 # PRD 0006: Show the opponent's last move in the trainer
 
-- Status: proposed (2026-10-27)
+- Status: built (2026-10-28)
 - Date: 2026-10-27
 - Owner: Frederik
 - Related: [PRD 0004](0004-train-your-own-blunders.md) (the trainer), the puzzle board on Lichess
@@ -63,9 +63,8 @@ highlighted.
 - A button to replay the opponent's move.
 - A move list in the trainer. It would show the answer ([PRD 0004](0004-train-your-own-blunders.md), notes).
 
-## Open questions
+## Decisions
 
-- Highlight color: the Lichess yellow-green (`rgba(155, 199, 0, 0.41)`) or a color of our own? The selected square is
-  already yellow (`rgba(250, 204, 21, 0.5)`), so the two must differ.
-- Pause before the opponent's move: 600 ms like above, or shorter?
-- Apply the same highlight to `BoardView` in this PRD, or keep it separate as above?
+- Highlight color: the Lichess yellow-green (`rgba(155, 199, 0, 0.41)`). It differs from the yellow selected square.
+- Pause before the opponent's move: 600 ms.
+- `BoardView` keeps no last-move highlight. That stays a separate change.

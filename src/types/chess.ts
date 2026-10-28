@@ -14,6 +14,7 @@ export type TacticalTag =
   | 'ALLOWED_FORK'
   | 'DISCOVERED_ATTACK'
   | 'MISSED_CAPTURE'
+  | 'KING_IN_CENTER'
 
 export type GoodMoveKind = 'TACTICAL_STRIKE' | 'DEFENSIVE_SAVE' | 'CLEAN_CONVERSION'
 

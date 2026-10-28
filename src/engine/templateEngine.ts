@@ -1,3 +1,4 @@
+import { Chess } from 'chess.js'
 import type { GoodMoveKind, MoveEval, ParsedGame, Score, TacticalTag } from '../types/chess.ts'
 import type { MoveFeatures } from './heuristics.ts'
 import { findTrap } from './openingDb.ts'
@@ -14,6 +15,7 @@ export const TAG_LABEL: Record<TacticalTag, string> = {
   ALLOWED_FORK: 'Allowed forks',
   DISCOVERED_ATTACK: 'Discovered attacks',
   MISSED_CAPTURE: 'Missed captures',
+  KING_IN_CENTER: 'King in the center',
 }
 
 export const KIND_LABEL: Record<GoodMoveKind, string> = {
@@ -40,11 +42,20 @@ export function moveNotation(ply: number, san: string, suffix = ''): string {
   return `${Math.floor(ply / 2) + 1}.${ply % 2 ? '..' : ''} ${san}${suffix}`
 }
 
+/** The first SAN move of the side that starts the line that matches. */
+const firstOwn = (line: string[], match: (san: string) => boolean) => line.find((san, i) => i % 2 === 0 && match(san))
+
 export function generateErrorSummary(move: MoveEval, moves: string[]): string {
   const best = move.bestMoveSan ?? '?'
+  if (new Chess(move.fenAfter).isStalemate()) {
+    return `Stalemates the opponent. Best was ${best}${move.mateBefore && move.mateBefore > 0 ? `, mate in ${move.mateBefore}` : ''}.`
+  }
   switch (move.tag) {
-    case 'HANGING_PIECE':
-      return `Leaves a piece where the opponent wins it. Best was ${best}.`
+    case 'HANGING_PIECE': {
+      if (move.tagMaterial !== 1) return `Leaves a piece where the opponent wins it. Best was ${best}.`
+      const capture = firstOwn(move.reply, san => san.includes(`x${move.tagSquares?.[0]}`))
+      return capture ? `Loses a pawn to ${capture}.` : `Loses a pawn. Best was ${best}.`
+    }
     case 'F2_F7_VULNERABILITY':
       return `Weakens ${move.color === 'white' ? 'f2' : 'f7'} while the king is still in the center. Best was ${best}.`
     case 'OPENING_TRAP':
@@ -66,6 +77,11 @@ export function generateErrorSummary(move: MoveEval, moves: string[]): string {
     case 'MISSED_CAPTURE':
       if (move.tagMaterial === 1) return `Misses ${best}, which wins a pawn.`
       return best.includes('x') ? `Misses the free capture ${best}.` : `Misses ${best}, which wins material.`
+    case 'KING_IN_CENTER': {
+      const reply = move.tagVia === 'reply'
+      const check = firstOwn(reply ? move.reply : move.bestLine, san => /[+#]/.test(san))
+      return reply ? `Leaves the king in the center. ${check ?? move.reply[0]} follows.` : `Misses ${check ?? best} against the king in the center.`
+    }
     default:
       return `Tactical error. Best was ${best}.`
   }
@@ -140,6 +156,10 @@ export const RULES: Record<TacticalTag, [string, string]> = {
   MISSED_CAPTURE: [
     'After each move of your opponent, ask: did a piece of theirs become loose? Take free material.',
     'Count attackers and defenders of every enemy piece you attack.',
+  ],
+  KING_IN_CENTER: [
+    'Castle before you open the center or take pawns with the queen.',
+    'When the enemy king is still in the center and its f-pawn has moved, look at Qh5+ or Qh4+ first.',
   ],
 }
 

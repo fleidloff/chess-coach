@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Chess } from 'chess.js'
-import type { GameEvals, ParsedGame, PositionEval } from '../types/chess.ts'
+import type { GameEvals, MoveEval, ParsedGame, PositionEval } from '../types/chess.ts'
 import { tagBlunder } from './heuristics.ts'
 import { OPENING_TRAPS } from './openingDb.ts'
 import { aggregate, toCp, winChance } from './patternAggregator.ts'
 import { parseInfo, terminalScore } from './uci.ts'
-import { formatScore, RULES } from './templateEngine.ts'
+import { formatScore, generateErrorSummary, RULES } from './templateEngine.ts'
 import { judge, trainingPositions } from './trainer.ts'
 
 test('every opening trap is legal, and its refutation too', () => {
@@ -159,6 +159,53 @@ test('a pawn that the best line wins counts as a missed capture', () => {
   assert.deepEqual(result, { tag: 'MISSED_CAPTURE', squares: ['e4'], via: 'best', material: 1 })
 })
 
+const line = (fenBefore: string, san: string, bestLine: string[], replyLine: string[]) =>
+  tagBlunder({ moves: [san], ply: 0, fenBefore, bestMoveUci: bestLine[0], bestLine, replyUci: replyLine[0], replyLine })
+
+test('tags the patterns of PRD 0007, from fredbbs games', () => {
+  // 21... Nd2+ leaves b7 to Qxb7.
+  const pawn = line(
+    '3rr1k1/Qp3ppp/2p5/8/P3nPbP/1P6/2P1N2R/5KN1 b - - 0 21',
+    'Nd2+',
+    ['h7h5', 'f1g2', 'd8d1', 'f4f5', 'c6c5', 'h2h3', 'e4f6', 'h3d3'],
+    ['f1e1', 'h7h5', 'a7b7', 'c6c5', 'a4a5', 'd2e4', 'a5a6', 'e4c3'],
+  )
+  assert.deepEqual(pawn, { tag: 'HANGING_PIECE', squares: ['b7'], via: 'reply', material: 1 })
+  // 15... Qa5 with the king on e8: Na6, Rb7, then Nc7+.
+  const allowed = line(
+    'r3kb1r/p4ppp/2p1pn2/2Np4/1q1P1B2/4P3/P3QPPP/1R3RK1 b kq - 3 15',
+    'Qa5',
+    ['b4c4', 'e2c4', 'd5c4', 'c5a6', 'f6d5', 'f1c1', 'd5f4', 'e3f4'],
+    ['c5a6', 'a8c8', 'b1b7', 'f8a3', 'a6c7', 'e8f8', 'e2c2', 'f8g8'],
+  )
+  assert.deepEqual(allowed, { tag: 'KING_IN_CENTER', squares: ['c7', 'e8'], via: 'reply' })
+  // 8... cxd4 misses Qh4+ against the king on e1.
+  const missed = line(
+    'r2qkbnr/pp1b1ppp/8/2p1p3/3PP3/8/PP4PP/RNBQKBNR b KQkq - 0 8',
+    'cxd4',
+    ['d8h4', 'e1e2', 'd7b5', 'e2f3', 'h4f6', 'f3g3', 'b5f1', 'g1f3'],
+    ['g1f3', 'g8e7', 'f1d3', 'e7g6', 'e1g1', 'f8e7', 'g1h1', 'e8g8'],
+  )
+  assert.deepEqual(missed, { tag: 'KING_IN_CENTER', squares: ['h4', 'e1'], via: 'best' })
+  // 5... cxd5 takes a pawn and loses one back: no lost pawn, but Nd6+ follows.
+  const trade = line(
+    'r1bqkbnr/pp1n1ppp/2p1p3/3P4/3P1B2/2N5/PPP2PPP/R2QKBNR b KQkq - 0 5',
+    'cxd5',
+    ['e6d5', 'f1d3', 'g8f6', 'd1e2', 'f8e7', 'g2g4', 'e8g8', 'g4g5'],
+    ['c3b5', 'e6e5', 'd4e5', 'a7a6', 'b5d6', 'f8d6', 'e5d6', 'g8f6'],
+  )
+  assert.equal(trade?.tag, 'KING_IN_CENTER')
+})
+
+test('names a stalemate instead of the tag', () => {
+  // 64... Rg5 stalemates with mate in 3 on the board.
+  const fenBefore = '8/8/4k3/1r6/8/7K/5q2/8 b - - 2 64'
+  const chess = new Chess(fenBefore)
+  chess.move('Rg5')
+  const move = { san: 'Rg5', fenBefore, fenAfter: chess.fen(), bestMoveSan: 'Qf3', mateBefore: 3, tag: 'MISSED_MATE' } as MoveEval
+  assert.equal(generateErrorSummary(move, []), 'Stalemates the opponent. Best was Qf3, mate in 3.')
+})
+
 test('picks training positions and judges a move against the best move', () => {
   const black = game('black')
   const { errorsByGame } = aggregate([black], new Map([['black', evals]]))
@@ -171,6 +218,22 @@ test('picks training positions and judges a move against the best move', () => {
   assert.deepEqual(judge('black', { cp: -40 }, { cp: -60 }), { correct: true, cp: 60, loss: 0 })
   assert.deepEqual(judge('black', { cp: -40 }, { cp: -10 }), { correct: true, cp: 10, loss: 30 })
   assert.deepEqual(judge('white', { cp: 200 }, { mate: -2 }), { correct: false, cp: -1000, loss: 1200 })
+})
+
+test('a training position carries the opponent move before the error', () => {
+  const fens = [new Chess().fen()]
+  const replay = new Chess()
+  for (const m of scholar) {
+    replay.move(m)
+    fens.push(replay.fen())
+  }
+  const error = (ply: number) => ({ ply, san: scholar[ply], fenBefore: fens[ply], tag: 'MISSED_FORK', bestMoveSan: 'a3', bestLine: [] }) as unknown as MoveEval
+  const white = game('white')
+  const [first, third] = trainingPositions([white], new Map([['white', [error(0), error(4)]]]), 'MISSED_FORK')
+  assert.equal(first.lastMove, undefined)
+  assert.deepEqual(third.lastMove, { san: 'Nc6', from: 'b8', to: 'c6', notation: '2... Nc6', fenBefore: fens[3] })
+  const [black] = trainingPositions([game('black')], new Map([['black', [error(5)]]]), 'MISSED_FORK')
+  assert.deepEqual(black.lastMove, { san: 'Qh5', from: 'd1', to: 'h5', notation: '3. Qh5', fenBefore: fens[4] })
 })
 
 test('picks the worst errors and the best good moves, then lists them in game order', () => {
