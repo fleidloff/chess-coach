@@ -274,7 +274,7 @@ export default function App() {
         ) : (
           <>
             <div className="max-md:contents md:overflow-y-auto md:p-4">
-              <BoardView game={game} report={report} state={board} onChange={setBoard} />
+              <BoardView game={game} report={report} evals={selectedId ? evals.get(selectedId) : undefined} state={board} onChange={setBoard} />
             </div>
             <aside
               aria-label="Analysis"

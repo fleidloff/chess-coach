@@ -1,4 +1,4 @@
-import type { GoodMoveKind, MoveEval, ParsedGame, TacticalTag } from '../types/chess.ts'
+import type { GoodMoveKind, MoveEval, ParsedGame, Score, TacticalTag } from '../types/chess.ts'
 import type { MoveFeatures } from './heuristics.ts'
 import { findTrap } from './openingDb.ts'
 
@@ -22,10 +22,17 @@ export const KIND_LABEL: Record<GoodMoveKind, string> = {
   CLEAN_CONVERSION: 'Clean conversion',
 }
 
+const pawns = (cp: number) => `${cp > 0 ? '+' : cp < 0 ? '−' : ''}${Math.abs(cp / 100).toFixed(1)}`
+
 /** Centipawns as pawns with a sign. ±1000 is the clamp for a forced mate. */
 export function formatCp(cp: number): string {
   if (Math.abs(cp) >= 1000) return cp > 0 ? '+M' : '−M'
-  return `${cp > 0 ? '+' : cp < 0 ? '−' : ''}${Math.abs(cp / 100).toFixed(1)}`
+  return pawns(cp)
+}
+
+/** Engine score from White's point of view: "+1.3", "−0.4", "+M3". */
+export function formatScore(s: Score): string {
+  return s.mate === undefined ? pawns(s.cp ?? 0) : `${s.mate > 0 ? '+' : '−'}M${Math.abs(s.mate)}`
 }
 
 /** "5. c3" for White, "4... Qb4+" for Black. */

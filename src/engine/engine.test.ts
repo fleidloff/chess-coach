@@ -4,9 +4,9 @@ import { Chess } from 'chess.js'
 import type { GameEvals, ParsedGame, PositionEval } from '../types/chess.ts'
 import { tagBlunder } from './heuristics.ts'
 import { OPENING_TRAPS } from './openingDb.ts'
-import { aggregate, toCp } from './patternAggregator.ts'
+import { aggregate, toCp, winChance } from './patternAggregator.ts'
 import { parseInfo, terminalScore } from './uci.ts'
-import { RULES } from './templateEngine.ts'
+import { formatScore, RULES } from './templateEngine.ts'
 import { judge, trainingPositions } from './trainer.ts'
 
 test('every opening trap is legal, and its refutation too', () => {
@@ -27,6 +27,17 @@ test('reads UCI info lines from White’s point of view', () => {
   assert.deepEqual(terminalScore('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3'), { mate: -1 })
   assert.equal(toCp({ mate: -4 }), -1000)
   assert.equal(toCp({ cp: 2500 }), 1000)
+})
+
+test('the eval bar shows White’s win chance and the score', () => {
+  assert.equal(winChance({ cp: 0 }), 50)
+  assert.equal(Math.round(winChance({ cp: 300 })), 75)
+  assert.equal(Math.round(winChance({ cp: -300 })), 25)
+  assert.equal(winChance({ mate: 3 }), 100)
+  assert.equal(winChance({ mate: -1 }), 0)
+  assert.equal(formatScore({ cp: 1250 }), '+12.5')
+  assert.equal(formatScore({ cp: -40 }), '−0.4')
+  assert.equal(formatScore({ mate: -2 }), '−M2')
 })
 
 const tag = (fenBefore: string, san: string, bestMoveUci?: string, replyUci?: string) =>

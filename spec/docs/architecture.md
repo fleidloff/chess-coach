@@ -151,6 +151,9 @@ trainer for its own tag. `App` builds the position list for every tag that appea
 - Header: username, platform, analyze/stop, progress bar ("Analyzing game 4/10"), game selector.
 - Left panel, `BoardView`: players, board in the user's orientation, step controls, the move list with `??`/`!`
   marks. Keyboard: ←, →, Home, End (not while focus is in a form field).
+- The eval bar left of the board shows White's win chance (`winChance()`, Lichess formula) and the score
+  (`formatScore()`) of the shown game position. It is faded while a branch plays or before the game is analysed: those
+  positions have no evaluation. The trainer has no eval bar.
 - Right panel, `FeedbackPanel`: good moves, top errors, rules, then the pattern pills of all games. Good moves come
   first, so the report opens with what went right.
 - `BoardState` lives in `App`: `{ ply, node?, branch? }`. A click on a feedback card sets `ply` to the move and shows

@@ -34,6 +34,12 @@ export function toCp(s: Score): number {
   return Math.max(-1000, Math.min(1000, s.cp ?? 0))
 }
 
+/** White's win chance in percent (Lichess formula). A forced mate counts as 100 or 0. */
+export function winChance(s: Score): number {
+  if (s.mate !== undefined) return s.mate > 0 ? 100 : 0
+  return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * toCp(s))) - 1)
+}
+
 /** A move that loses 150 cp or more, unless the mover is still clearly winning after it. */
 export const isBlunder = (m: MoveEval) => m.cpl >= BLUNDER_CPL && m.cpAfter < 500 && m.bestMoveSan !== m.san
 

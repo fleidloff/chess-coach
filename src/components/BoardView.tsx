@@ -2,9 +2,10 @@ import { useEffect, useMemo } from 'react'
 import { Chessboard } from 'react-chessboard'
 import { Chess } from 'chess.js'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, Pause, Play, Undo2 } from 'lucide-react'
-import type { Branch, FeedbackNode, GameReport, ParsedGame } from '../types/chess.ts'
+import type { Branch, FeedbackNode, GameEvals, GameReport, ParsedGame, Score } from '../types/chess.ts'
 import { playMove } from '../engine/heuristics.ts'
-import { moveNotation, resultFor } from '../engine/templateEngine.ts'
+import { winChance } from '../engine/patternAggregator.ts'
+import { formatScore, moveNotation, resultFor } from '../engine/templateEngine.ts'
 
 export interface BoardState {
   /** Number of game moves played on the board. */
@@ -16,6 +17,7 @@ export interface BoardState {
 interface Props {
   game?: ParsedGame
   report?: GameReport
+  evals?: GameEvals
   state: BoardState
   onChange: (state: BoardState) => void
 }
@@ -41,10 +43,36 @@ function fensOf(start: string, moves: string[]): string[] {
   return fens
 }
 
+/** Vertical bar: White's win chance, with White's side at the bottom of the board. */
+function EvalBar({ score, whiteAtBottom }: { score?: Score; whiteAtBottom: boolean }) {
+  const white = score ? winChance(score) : 50
+  const whiteLeads = white >= 50
+  return (
+    <div
+      role="img"
+      aria-label={score ? `Evaluation ${formatScore(score)}` : 'No evaluation for this position'}
+      className={`relative flex w-5 shrink-0 overflow-hidden rounded-sm bg-stone-800 dark:bg-stone-700 ${whiteAtBottom ? 'flex-col-reverse' : 'flex-col'} ${score ? '' : 'opacity-40'}`}
+    >
+      <div
+        className="bg-stone-100 transition-[height] duration-300 motion-reduce:transition-none dark:bg-stone-200"
+        style={{ height: `${white}%` }}
+      />
+      {score && (
+        <span
+          aria-hidden
+          className={`absolute inset-x-0 text-center text-[9px] leading-5 font-semibold ${whiteLeads === whiteAtBottom ? 'bottom-0' : 'top-0'} ${whiteLeads ? 'text-stone-900 dark:text-stone-900' : 'text-stone-100 dark:text-stone-100'}`}
+        >
+          {formatScore(score).replace('+', '')}
+        </span>
+      )}
+    </div>
+  )
+}
+
 const btn =
   'inline-flex items-center justify-center rounded-md border border-stone-300 p-2 hover:bg-stone-100 disabled:opacity-40 disabled:hover:bg-transparent focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none dark:border-stone-700 dark:hover:bg-stone-800'
 
-export function BoardView({ game, report, state, onChange }: Props) {
+export function BoardView({ game, report, evals, state, onChange }: Props) {
   const moves = useMemo(() => game?.moves ?? [], [game])
   const fens = useMemo(() => fensOf(START, moves), [moves])
   const { ply, node, branch } = state
@@ -161,19 +189,22 @@ export function BoardView({ game, report, state, onChange }: Props) {
       {player(orientation === 'white' ? 'black' : 'white')}
       {/* Sticky on phones. `max-md:contents` on this section and its wrapper in App lets it span the cards below. */}
       <div className="flex flex-col gap-2 max-md:sticky max-md:top-0 max-md:z-10 max-md:border-b max-md:border-stone-200 max-md:bg-stone-50 max-md:py-2 max-md:shadow-sm dark:max-md:border-stone-800 dark:max-md:bg-stone-950">
-        <div className="mx-auto w-full max-md:max-w-[min(100%,40svh)]">
-          <Chessboard
-            options={{
-              id: 'coach-board',
-              position: fen,
-              boardOrientation: orientation,
-              arrows,
-              squareStyles,
-              allowDragging: false,
-              allowDrawingArrows: false,
-              showAnimations: !reducedMotion(),
-            }}
-          />
+        <div className="mx-auto flex w-full gap-1.5 max-md:max-w-[min(100%,40svh)]">
+          {game && <EvalBar score={branch ? undefined : evals?.positions[ply]?.score} whiteAtBottom={orientation === 'white'} />}
+          <div className="min-w-0 flex-1">
+            <Chessboard
+              options={{
+                id: 'coach-board',
+                position: fen,
+                boardOrientation: orientation,
+                arrows,
+                squareStyles,
+                allowDragging: false,
+                allowDrawingArrows: false,
+                showAnimations: !reducedMotion(),
+              }}
+            />
+          </div>
         </div>
         {player(orientation, 'max-md:hidden')}
 
